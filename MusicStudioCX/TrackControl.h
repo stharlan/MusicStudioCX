@@ -11,8 +11,6 @@
 
 typedef struct {
 	BYTE* buffer;
-	UINT32 frame_offset;
-	UINT32 max_frames;
 } TrackContext;
 
 typedef struct {
@@ -25,6 +23,6 @@ namespace MusicStudioCX
 
 	void initialize_track_window();
 	HWND create_track_window(HWND parent, LPCWSTR TrackName);
-	TrackContext* GetTrackContext(HWND cwnd);
+	TrackContext* get_track_context(HWND cwnd);
 
 }
