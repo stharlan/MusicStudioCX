@@ -244,7 +244,6 @@ namespace MusicStudioCX
 	LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
 		MainWindowContext* ctx = nullptr;
-		SCROLLINFO si;
 		HWND hwndCommand = nullptr;
 
 		switch (message)

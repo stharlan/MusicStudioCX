@@ -44,11 +44,6 @@ private:
 	RTWQWORKITEM_KEY workItemKey;
 	IRtwqAsyncResult *pAsyncResult;
 
-	LARGE_INTEGER perff;
-	LARGE_INTEGER lastCount;
-	LARGE_INTEGER count1;
-	LARGE_INTEGER count3;
-
 	IAudioCaptureClient *pAudioCaptureClient;
 	IAudioRenderClient *pAudioRenderClient;
 
@@ -60,9 +55,6 @@ private:
 	LPRTA_DEVICE_INFO lpCaptureDeviceInfo;
 	LPRTA_DEVICE_INFO lpRenderDeviceInfo;
 	CAPTURE_DATA_HANDLER pHandler;
-
-	UINT32 LoopCounter;
-	UINT32 LoopLimit;
 
 };
 

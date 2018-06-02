@@ -190,7 +190,6 @@ UINT32 rta_list_supporting_devices_2(RTA_DEVICE_INFO** lppDeviceInfo,
 		}
 	}
 
-done:
 	if (pMMDeviceEnumerator != NULL) pMMDeviceEnumerator->Release();
 	if (pMMDeviceCollection != NULL) pMMDeviceCollection->Release();
 	return count;
@@ -592,305 +591,6 @@ done:
 	return retval;
 }
 
-/*
-void rta_capture_frames(LPRTA_DEVICE_INFO lpCaptureDeviceInfo, CAPTURE_DATA_HANDLER pHandler)
-{
-HANDLE BufferEvent = NULL;
-IAudioCaptureClient *pAudioCaptureClient = NULL;
-HANDLE hTask = NULL;
-UINT32 FrameCount = 0;
-DWORD flags = 0;
-BYTE* pCapBuffer = NULL;
-BOOL handlerResult = FALSE;
-
-BufferEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-if (BufferEvent == NULL) {
-last_error = ERROR_9;
-goto done;
-}
-
-HRESULT hr = lpCaptureDeviceInfo->pAudioClient->SetEventHandle(BufferEvent);
-CHKERR(hr, ERROR_10);
-
-hr = lpCaptureDeviceInfo->pAudioClient->GetService(__uuidof(IAudioCaptureClient), (void**)&pAudioCaptureClient);
-CHKERR(hr, ERROR_11);
-
-DWORD dwTaskIndex = 0;
-hTask = AvSetMmThreadCharacteristics(L"Pro Audio", &dwTaskIndex);
-if (hTask == NULL) {
-last_error = ERROR_12;
-goto done;
-}
-
-//lpRenderDeviceInfo->pAudioClient->GetBufferSize(&FrameCount);
-//pAudioRenderClient->GetBuffer(FrameCount, &pRenBuffer);
-//pAudioRenderClient->ReleaseBuffer(FrameCount, AUDCLNT_BUFFERFLAGS_SILENT);
-//printf("silent %i frames\n", FrameCount);
-
-printf("\nPress any key...\n");
-_getch();
-
-hr = lpCaptureDeviceInfo->pAudioClient->Start();
-CHKERR(hr, ERROR_13);
-
-LARGE_INTEGER perff;
-LARGE_INTEGER count1;
-LARGE_INTEGER count2;
-LARGE_INTEGER count3;
-
-QueryPerformanceFrequency(&perff);
-
-printf("Counts per second %lli\n", perff.QuadPart);
-//LONGLONG CountsPerMilli = perff.QuadPart / (LONGLONG)1000;
-
-DWORD WaitResult = 0;
-
-for (;;) {
-
-QueryPerformanceCounter(&count1);
-
-// wait for buffer event
-WaitResult = WaitForSingleObject(BufferEvent, 2000);
-if (WaitResult != WAIT_OBJECT_0) {
-if (WaitResult == WAIT_TIMEOUT) {
-printf("\n\nERROR: Timeout elapsed on wait for capture buffer\n");
-}
-else {
-printf("\n\nERROR: WaitForSingleObject -> 0x%08x\n", WaitResult);
-}
-break;
-}
-
-QueryPerformanceCounter(&count2);
-
-// get capture buffer
-hr = pAudioCaptureClient->GetBuffer(&pCapBuffer, &FrameCount, &flags, NULL, NULL);
-if (FAILED(hr)) {
-printf("\n\nERORR: pAudioCaptureClient->GetBuffer\n");
-break;
-}
-
-// copy data to frame buffer
-memcpy(lpCaptureDeviceInfo->FrameBuffer, pCapBuffer,
-FrameCount * lpCaptureDeviceInfo->SizeOfFrame);
-
-// release capture buffer
-hr = pAudioCaptureClient->ReleaseBuffer(FrameCount);
-if (FAILED(hr)) {
-printf("\n\nERORR: pAudioCaptureClient->ReleaseBuffer\n");
-break;
-}
-
-// run data through handler
-if (pHandler != NULL)
-pHandler(lpCaptureDeviceInfo->FrameBuffer, FrameCount, &handlerResult);
-
-// find peaks
-short peak = 0;
-//for (FRAME* pFrame = lpCaptureDeviceInfo->FrameBuffer; pFrame < lpCaptureDeviceInfo->FrameBuffer + FrameCount; pFrame++) {
-//if (pFrame->left > peak) peak = pFrame->left;
-//}
-
-// break if done
-if (TRUE == handlerResult) break;
-
-QueryPerformanceCounter(&count3);
-
-float deltaSeconds = ((float)(count3.QuadPart - count1.QuadPart) * 1000.0f) / ((float)perff.QuadPart);
-printf("Wait = %5lli cts; Proc = %5lli cts; Total = %5lli cts; Total = %6.3f ms, Peak = %.5i\n",
-(count2.QuadPart - count1.QuadPart),
-(count3.QuadPart - count2.QuadPart),
-(count3.QuadPart - count1.QuadPart), deltaSeconds, peak);
-
-}
-
-printf("\n");
-
-hr = lpCaptureDeviceInfo->pAudioClient->Stop();
-CHKERR(hr, ERROR_16);
-
-BOOL bResult = AvRevertMmThreadCharacteristics(hTask);
-if (bResult == 0) {
-last_error = ERROR_17;
-}
-
-done:
-if (BufferEvent != NULL) CloseHandle(BufferEvent);
-if (pAudioCaptureClient != NULL) pAudioCaptureClient->Release();
-
-}
-*/
-
-/*
-void rta_capture_and_render_frames(LPRTA_DEVICE_INFO lpCaptureDeviceInfo,
-LPRTA_DEVICE_INFO lpRenderDeviceInfo, CAPTURE_DATA_HANDLER pHandler)
-{
-HANDLE BufferEvent = NULL;
-IAudioCaptureClient *pAudioCaptureClient = NULL;
-IAudioRenderClient *pAudioRenderClient = NULL;
-HANDLE hTask = NULL;
-UINT32 FrameCount = 0;
-DWORD flags = 0;
-BYTE* pCapBuffer = NULL;
-BYTE* pRenBuffer = NULL;
-BOOL handlerResult = FALSE;
-
-BufferEvent = CreateEvent(NULL, FALSE, FALSE, NULL);
-if (BufferEvent == NULL) {
-last_error = ERROR_9;
-goto done;
-}
-
-HRESULT hr = lpCaptureDeviceInfo->pAudioClient->SetEventHandle(BufferEvent);
-CHKERR(hr, ERROR_10);
-
-hr = lpCaptureDeviceInfo->pAudioClient->GetService(__uuidof(IAudioCaptureClient), (void**)&pAudioCaptureClient);
-CHKERR(hr, ERROR_11);
-
-hr = lpRenderDeviceInfo->pAudioClient->GetService(__uuidof(IAudioRenderClient), (void**)&pAudioRenderClient);
-CHKERR(hr, ERROR_18);
-
-DWORD dwTaskIndex = 0;
-hTask = AvSetMmThreadCharacteristics(L"Pro Audio", &dwTaskIndex);
-if (hTask == NULL) {
-last_error = ERROR_12;
-goto done;
-}
-
-//lpRenderDeviceInfo->pAudioClient->GetBufferSize(&FrameCount);
-//pAudioRenderClient->GetBuffer(FrameCount, &pRenBuffer);
-//pAudioRenderClient->ReleaseBuffer(FrameCount, AUDCLNT_BUFFERFLAGS_SILENT);
-//printf("silent %i frames\n", FrameCount);
-
-printf("\nPress any key...\n");
-_getch();
-
-hr = lpCaptureDeviceInfo->pAudioClient->Start();
-CHKERR(hr, ERROR_13);
-
-hr = lpRenderDeviceInfo->pAudioClient->Start();
-CHKERR(hr, ERROR_19);
-
-LARGE_INTEGER perff;
-LARGE_INTEGER count1;
-LARGE_INTEGER count2;
-LARGE_INTEGER count3;
-
-QueryPerformanceFrequency(&perff);
-
-printf("Counts per second %lli\n", perff.QuadPart);
-//LONGLONG CountsPerMilli = perff.QuadPart / (LONGLONG)1000;
-
-DWORD WaitResult = 0;
-
-for (;;) {
-
-QueryPerformanceCounter(&count1);
-
-// wait for buffer event
-WaitResult = WaitForSingleObject(BufferEvent, 2000);
-if (WaitResult != WAIT_OBJECT_0) {
-if (WaitResult == WAIT_TIMEOUT) {
-printf("\n\nERROR: Timeout elapsed on wait for capture buffer\n");
-}
-else {
-printf("\n\nERROR: WaitForSingleObject -> 0x%08x\n", WaitResult);
-}
-break;
-}
-
-QueryPerformanceCounter(&count2);
-
-// get capture buffer
-hr = pAudioCaptureClient->GetBuffer(&pCapBuffer, &FrameCount, &flags, NULL, NULL);
-if (FAILED(hr)) {
-printf("\n\nERORR: pAudioCaptureClient->GetBuffer\n");
-break;
-}
-
-// copy data to frame buffer
-memcpy(lpCaptureDeviceInfo->FrameBuffer, pCapBuffer,
-FrameCount * lpCaptureDeviceInfo->SizeOfFrame);
-
-// release capture buffer
-hr = pAudioCaptureClient->ReleaseBuffer(FrameCount);
-if (FAILED(hr)) {
-printf("\n\nERORR: pAudioCaptureClient->ReleaseBuffer\n");
-break;
-}
-
-// run data through handler
-if(pHandler != NULL)
-pHandler(lpCaptureDeviceInfo->FrameBuffer, FrameCount, &handlerResult);
-
-
-// get render buffer
-//printf("\nrequesting %i frames from render client\n", FrameCount);
-UINT32 padding = 0;
-lpRenderDeviceInfo->pAudioClient->GetCurrentPadding(&padding);
-printf("padding = %4i; ", padding);
-hr = pAudioRenderClient->GetBuffer(FrameCount, &pRenBuffer);
-if (FAILED(hr)) {
-if (hr == AUDCLNT_E_BUFFER_TOO_LARGE) {
-printf("\n\nERROR: pAudioRenderClient->GetBuffer -> Buffer too large\n");
-}
-else {
-printf("\n\nERROR: pAudioRenderClient->GetBuffer -> 0x%08x\n", hr);
-}
-break;
-}
-
-// copy the capture buffer data to the render buffer
-memcpy(pRenBuffer, lpCaptureDeviceInfo->FrameBuffer,
-FrameCount * lpCaptureDeviceInfo->SizeOfFrame);
-
-// release the render buffer
-hr = pAudioRenderClient->ReleaseBuffer(FrameCount, 0);
-if (FAILED(hr)) {
-printf("\n\nERORR: pAudioRenderClient->ReleaseBuffer\n");
-break;
-}
-
-// find peaks
-short peak = 0;
-//for (FRAME* pFrame = lpCaptureDeviceInfo->FrameBuffer; pFrame < lpCaptureDeviceInfo->FrameBuffer + FrameCount; pFrame++) {
-//if (pFrame->left > peak) peak = pFrame->left;
-//}
-
-// break if done
-if (TRUE == handlerResult) break;
-
-QueryPerformanceCounter(&count3);
-
-float deltaSeconds = ((float)(count3.QuadPart - count1.QuadPart) * 1000.0f) / ((float)perff.QuadPart);
-printf("Wait = %5lli cts; Proc = %5lli cts; Total = %5lli cts; Total = %6.3f ms, Peak = %.5i\r",
-(count2.QuadPart - count1.QuadPart),
-(count3.QuadPart - count2.QuadPart),
-(count3.QuadPart - count1.QuadPart), deltaSeconds, peak);
-
-}
-
-printf("\n");
-
-hr = lpCaptureDeviceInfo->pAudioClient->Stop();
-CHKERR(hr, ERROR_16);
-
-hr = lpRenderDeviceInfo->pAudioClient->Stop();
-CHKERR(hr, ERROR_20);
-
-BOOL bResult = AvRevertMmThreadCharacteristics(hTask);
-if (bResult == 0) {
-last_error = ERROR_17;
-}
-
-done:
-if (BufferEvent != NULL) CloseHandle(BufferEvent);
-if (pAudioCaptureClient != NULL) pAudioCaptureClient->Release();
-if (pAudioRenderClient != NULL) pAudioRenderClient->Release();
-
-}
-*/
-
 void rta_capture_frames_rtwq(LPRTA_DEVICE_INFO lpCaptureDeviceInfo,
 	LPRTA_DEVICE_INFO lpRenderDeviceInfo, CAPTURE_DATA_HANDLER pHandler)
 {
@@ -910,47 +610,68 @@ void rta_capture_frames_rtwq(LPRTA_DEVICE_INFO lpCaptureDeviceInfo,
 	DWORD RtwqTaskId = 0;
 	IRtwqAsyncCallback *pAsyncCallback = NULL;
 
+	// instantiate a new audio handler
+	// creates a buffer event
 	pAudioHandler = new RtaAudioHandler();
 	if (pAudioHandler == NULL) {
 		last_error = ERROR_23;
 		goto done;
 	}
 
+	// set the capture audio client event handle
+	// to the event handle generated in the rta audio handler
 	hr = lpCaptureDeviceInfo->pAudioClient->SetEventHandle(
 		pAudioHandler->GetBufferEventHandle());
 	CHKERR(hr, ERROR_10);
 
+	// get an audio capture client interface from the capture device
 	hr = lpCaptureDeviceInfo->pAudioClient->GetService(__uuidof(IAudioCaptureClient),
 		(void**)&pAudioCaptureClient);
 	CHKERR(hr, ERROR_11);
 
+	// get an audio render client interface from the render device
 	if (lpRenderDeviceInfo != NULL) {
 		hr = lpRenderDeviceInfo->pAudioClient->GetService(__uuidof(IAudioRenderClient),
 			(void**)&pAudioRenderClient);
 		CHKERR(hr, ERROR_18);
 	}
 
+	// send the client interfaces, device info and handler routine pointer
+	// to the audio handler
 	pAudioHandler->ConfigureClientInformation(
 		pAudioCaptureClient, lpCaptureDeviceInfo,
 		pAudioRenderClient, lpRenderDeviceInfo, pHandler);
 
 	// START rtwq
 
+	// start the real-time work queue
 	hr = RtwqStartup();
 	CHKERR(hr, ERROR_21);
 
+	// obtains and locks a shared work queue
 	hr = RtwqLockSharedWorkQueue(L"Audio", 0, &RtwqTaskId, &g_RtwqId);
 	CHKERR(hr, ERROR_22);
 
+	// qi a async callback from the audio handler
 	hr = pAudioHandler->QueryInterface(__uuidof(IRtwqAsyncCallback), (void**)&pAsyncCallback);
 	CHKERR(hr, ERROR_24);
 
+	// From the docs:
+	// Creates an asynchronous result object. Use this function 
+	// if you are implementing an asynchronous method.
 	hr = pAudioHandler->CreateAsyncResult();
 	CHKERR(hr, ERROR_25);
 
+	// From the docs:
+	// Queues a work item that waits for an event to be signaled.
 	hr = pAudioHandler->PutWaitingWorkItem();
 	CHKERR(hr, ERROR_26);
 
+	// Create a stop event.
+	// Later, the method will block on this event.
+	// When the audio handler detemines that it
+	// is done, this event will be triggered
+	// causing this method to complete.
 	g_RtwqStop = CreateEvent(NULL, TRUE, FALSE, NULL);
 	if (g_RtwqStop == NULL) {
 		last_error = ERROR_9;
@@ -959,12 +680,11 @@ void rta_capture_frames_rtwq(LPRTA_DEVICE_INFO lpCaptureDeviceInfo,
 
 	// END rtwq
 
-	//printf("\nPress any key...\n");
-	//_getch();
-
+	// start capture
 	hr = lpCaptureDeviceInfo->pAudioClient->Start();
 	CHKERR(hr, ERROR_13);
 
+	// start render
 	if (lpRenderDeviceInfo != NULL) {
 		hr = lpRenderDeviceInfo->pAudioClient->Start();
 		if (FAILED(hr)) {
@@ -974,32 +694,15 @@ void rta_capture_frames_rtwq(LPRTA_DEVICE_INFO lpCaptureDeviceInfo,
 		}
 	}
 
-	//WINDOW_OUTPUT_BUFFER lpWindowOutputBuffer;
-	//lpWindowOutputBuffer.SamplesPerBuffer = lpCaptureDeviceInfo->BufferSizeFrames;
-	//lpWindowOutputBuffer.BufferPointer = (BYTE*)rta_alloc(lpCaptureDeviceInfo->SizeOfFrame * lpCaptureDeviceInfo->BufferSizeFrames);
-
+	// block and wait for handler to complete
 	printf("Waiting for stop signal...\n");
-
-	//hOutputWindowThread = RtaStartOutputWindow(1, &lpWindowOutputBuffer);
-	//hOutputWindowThread = RtaStartOutputWindow(1, nullptr);
-
-	//h[0] = hOutputWindowThread;
-	//h[1] = g_RtwqStop;
-
-	//WaitForMultipleObjects(2, h, TRUE, INFINITE);
 	WaitForSingleObject(g_RtwqStop, INFINITE);
 
-	//RtaCleanupOutputWindow();
-
+	// stop capture and render
 	hr = lpCaptureDeviceInfo->pAudioClient->Stop();
-
 	if (lpRenderDeviceInfo != NULL) {
 		lpRenderDeviceInfo->pAudioClient->Stop();
 	}
-
-	//if (lpWindowOutputBuffer.BufferPointer != NULL) {
-		//rta_free(lpWindowOutputBuffer.BufferPointer);
-	//}
 
 done:
 	if (last_error != NULL) printf("ERROR: %s\n", last_error);

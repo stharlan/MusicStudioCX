@@ -19,7 +19,7 @@ namespace MusicStudioCX
 			memset(ctx->buffer, 0, SAMPLES_PER_SEC * FRAME_SIZE * mctx->rec_time_seconds);
 
 			// fill it with a 440 hz sine wave
-			for (int f = 0; f < SAMPLES_PER_SEC * mctx->rec_time_seconds; f++) {
+			for (UINT32 f = 0; f < SAMPLES_PER_SEC * mctx->rec_time_seconds; f++) {
 				(((FRAME*)ctx->buffer) + f)->left = (short)(sinf((float)f / ((float)SAMPLES_PER_SEC / 440.0f) * 2.0f * 3.14159f) * 32767.0f);
 				(((FRAME*)ctx->buffer) + f)->right = (((FRAME*)ctx->buffer) + f)->left; 
 			}
@@ -48,12 +48,12 @@ namespace MusicStudioCX
 			MoveToEx(hdc, 0, 64, nullptr);
 
 			// get scroll bar pos
-			float pos = mctx->scroll_pos;
+			float pos = (float)mctx->scroll_pos;
 			UINT32 StartFrame = (UINT32)((pos / 65535.0f) * (float)mctx->max_frames);
 			UINT32 rpos = 0;
 			for (UINT32 FrameCount = StartFrame; FrameCount < mctx->max_frames; FrameCount += mctx->zoom_mult) {
 				rpos = (FrameCount - StartFrame) / mctx->zoom_mult;
-				if (rpos > r.right) break;
+				if (rpos > (UINT32)r.right) break;
 				LineTo(hdc, rpos, (pFrame[FrameCount].left / 512) + 64);
 			}
 			SelectObject(hdc, obj);
