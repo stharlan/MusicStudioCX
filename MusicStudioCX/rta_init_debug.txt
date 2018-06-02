@@ -1,0 +1,19 @@
+Native Samples Per Sec48000
+Native Sample Size 32
+Native Channels 2
+Wave Format Tag 65534
+Extra Data Size 22
+EXT Channel Mask 3; Channel Configuration:
+
+Speaker Front Left
+Speaker Front Right
+EXT Valid Bits Per Sample 32
+EXT is ieee float
+Def Period in Frames 480
+Fnd Period in Frames 480
+Min Period in Frames 480
+Max Period in Frames 480
+NOTE: Init is successful
+INIT: Success; buffer size is 480 [ 1056 ] 
+WARNING! Buffer sizes do not match!
+Latency = 0
