@@ -195,112 +195,6 @@ UINT32 rta_list_supporting_devices_2(RTA_DEVICE_INFO** lppDeviceInfo,
 	return count;
 }
 
-/*
-UINT32 rta_list_supporting_devices(RTA_DEVICE_INFO** lppDeviceInfo, WAVEFORMATEX* lpWaveFormatEx,
-DWORD StateMask, EDataFlow DataFlow, AUDCLNT_SHAREMODE ShareMode)
-{
-
-IMMDeviceEnumerator *pMMDeviceEnumerator = NULL;
-IMMDeviceCollection *pMMDeviceCollection = NULL;
-UINT32 count = 0;
-
-if (lppDeviceInfo == NULL) return count;
-*lppDeviceInfo = NULL;
-LPRTA_DEVICE_INFO current = NULL;
-
-HRESULT result = CoCreateInstance(__uuidof(MMDeviceEnumerator), (LPUNKNOWN)NULL,
-CLSCTX_ALL, __uuidof(IMMDeviceEnumerator), (LPVOID*)&pMMDeviceEnumerator);
-CHKERR(result, ERROR_1);
-
-result = pMMDeviceEnumerator->EnumAudioEndpoints(DataFlow, StateMask, &pMMDeviceCollection);
-CHKERR(result, ERROR_2);
-
-UINT pcDevices = 0;
-result = pMMDeviceCollection->GetCount(&pcDevices);
-CHKERR(result, ERROR_3);
-
-for (UINT pcDeviceId = 0; pcDeviceId < pcDevices; pcDeviceId++) {
-
-// get the current device by id
-IMMDevice *pMMDevice = NULL;
-result = pMMDeviceCollection->Item(pcDeviceId, &pMMDevice);
-
-if (SUCCEEDED(result)) {
-
-// activate it
-IAudioClient *pAudioClient = NULL;
-result = pMMDevice->Activate(__uuidof(IAudioClient), CLSCTX_ALL, (PROPVARIANT*)0, (void**)&pAudioClient);
-
-LPWAVEFORMATEX defFmt = NULL;
-pAudioClient->GetMixFormat(&defFmt);
-
-if (SUCCEEDED(result)) {
-
-// check if format supported
-result = pAudioClient->IsFormatSupported(ShareMode, lpWaveFormatEx, NULL);
-
-if (result == S_OK) {
-
-// get device id; do not free when done
-LPWSTR lpwstrDeviceId = NULL;
-result = pMMDevice->GetId(&lpwstrDeviceId);
-
-if (SUCCEEDED(result)) {
-
-// open prop store
-IPropertyStore *pPropertyStore = NULL;
-result = pMMDevice->OpenPropertyStore(STGM_READ, &pPropertyStore);
-
-if (SUCCEEDED(result)) {
-
-// get name
-PROPVARIANT varName;
-PropVariantInit(&varName);
-result = pPropertyStore->GetValue(PKEY_Device_FriendlyName, &varName);
-
-if (SUCCEEDED(result)) {
-
-// create data structure
-LPRTA_DEVICE_INFO lpdi = (LPRTA_DEVICE_INFO)rta_alloc(sizeof(RTA_DEVICE_INFO));
-lpdi->DeviceId = lpwstrDeviceId;
-lpdi->DeviceName = _wcsdup(varName.pwszVal);
-lpdi->ShareMode = ShareMode;
-lpdi->lpWaveFormatEx = lpWaveFormatEx;
-
-printf("==========\n");
-wprintf(L"%s\n", varName.pwszVal);
-printf("channels %i\n", defFmt->nChannels);
-printf("samples per sec %i\n", defFmt->nSamplesPerSec);
-printf("bits per samples %i\n", defFmt->wBitsPerSample);
-printf("==========\n");
-
-if (*lppDeviceInfo == NULL) *lppDeviceInfo = lpdi;
-if (current != NULL) current->pNext = lpdi;
-current = lpdi;
-count++;
-
-PropVariantClear(&varName);
-}
-pPropertyStore->Release();
-pPropertyStore = NULL;
-}
-}
-}
-pAudioClient->Release();
-pAudioClient = NULL;
-}
-pMMDevice->Release();
-pMMDevice = NULL;
-}
-}
-
-done:
-if (pMMDeviceEnumerator != NULL) pMMDeviceEnumerator->Release();
-if (pMMDeviceCollection != NULL) pMMDeviceCollection->Release();
-return count;
-}
-*/
-
 void rta_free_device_list(LPRTA_DEVICE_INFO lpDeviceInfo)
 {
 	if (lpDeviceInfo == NULL) return;
@@ -317,127 +211,6 @@ void rta_free_device_list(LPRTA_DEVICE_INFO lpDeviceInfo)
 		pThis = pNext;
 	}
 }
-
-/*
-BOOL rta_initialize_device(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags, UINT32 BufferSizeFrames) {
-
-if (lpDeviceInfo == NULL) return FALSE;
-
-printf("Init'ing device...\n");
-
-BOOL retval = FALSE;
-
-IMMDeviceEnumerator *pMMDeviceEnumerator = NULL;
-REFERENCE_TIME requested = 0;
-REFERENCE_TIME def;
-REFERENCE_TIME min;
-//BOOL firstTry = TRUE;
-
-if (BufferSizeFrames > 0) {
-printf("INIT: Trying with %i frames...\n", BufferSizeFrames);
-requested = (REFERENCE_TIME)((10000.0 * 1000 / lpDeviceInfo->lpWaveFormatEx->nSamplesPerSec * BufferSizeFrames) + 0.5);
-lpDeviceInfo->BufferSizeFrames = BufferSizeFrames;
-}
-else {
-lpDeviceInfo->BufferSizeFrames = 0;
-}
-
-if (lpDeviceInfo == NULL) return FALSE;
-
-HRESULT result = CoCreateInstance(__uuidof(MMDeviceEnumerator), (LPUNKNOWN)NULL,
-CLSCTX_ALL, __uuidof(IMMDeviceEnumerator), (LPVOID*)&pMMDeviceEnumerator);
-CHKERR(result, ERROR_1);
-
-start_again:
-
-// get device
-result = pMMDeviceEnumerator->GetDevice(lpDeviceInfo->DeviceId, &(lpDeviceInfo->pMMDevice));
-CHKERR(result, ERROR_4);
-
-result = lpDeviceInfo->pMMDevice->Activate(__uuidof(IAudioClient), CLSCTX_ALL, 0, (void**)&(lpDeviceInfo->pAudioClient));
-CHKERR(result, ERROR_5);
-
-if (requested == 0) {
-result = lpDeviceInfo->pAudioClient->GetDevicePeriod(&def, &min);
-CHKERR(result, ERROR_6);
-lpDeviceInfo->BufferSizeFrames =
-(lpDeviceInfo->lpWaveFormatEx->nSamplesPerSec *	(UINT32)min) / 10000000;
-printf("!Calculated buffer size = %i\n", lpDeviceInfo->BufferSizeFrames);
-}
-else {
-min = requested;
-}
-
-printf("Trying to init with reftime = %lli\n", min);
-
-result = lpDeviceInfo->pAudioClient->Initialize(
-lpDeviceInfo->ShareMode,
-StreamFlags,
-min, min, lpDeviceInfo->lpWaveFormatEx, NULL);
-//if(result == AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED || TRUE == firstTry)
-if (result == AUDCLNT_E_BUFFER_SIZE_NOT_ALIGNED)
-{
-//firstTry = FALSE;
-
-printf("ERROR: Not aligned...try again\n");
-
-UINT32 bufferSize = 0;
-result = lpDeviceInfo->pAudioClient->GetBufferSize(&bufferSize);
-CHKERR(result, ERROR_7);
-requested = (REFERENCE_TIME)((10000.0 * 1000 / lpDeviceInfo->lpWaveFormatEx->nSamplesPerSec * bufferSize) + 0.5);
-lpDeviceInfo->BufferSizeFrames = bufferSize;
-
-lpDeviceInfo->pAudioClient->Release();
-lpDeviceInfo->pAudioClient = NULL;
-
-lpDeviceInfo->pMMDevice->Release();
-lpDeviceInfo->pMMDevice = NULL;
-
-goto start_again;
-}
-else if (FAILED(result))
-{
-lpDeviceInfo->BufferSizeFrames = 0;
-last_error = ERROR_8;
-goto done;
-}
-else
-{
-//if (lpDeviceInfo->BufferSizeFrames == 0) {
-//	printf("ERROR: Buffer size is zero\n");
-//	UINT32 TempBufferSize = 0;
-//	lpDeviceInfo->pAudioClient->GetBufferSize(&TempBufferSize);
-//	printf("Using %i as buffer size (from Audio Client)\n", TempBufferSize);
-//	lpDeviceInfo->BufferSizeFrames = TempBufferSize;
-//}
-
-lpDeviceInfo->SizeOfFrame = lpDeviceInfo->lpWaveFormatEx->nChannels *
-(lpDeviceInfo->lpWaveFormatEx->wBitsPerSample / 8);
-
-lpDeviceInfo->FrameBuffer = (BYTE*)rta_alloc(
-lpDeviceInfo->BufferSizeFrames * lpDeviceInfo->SizeOfFrame);
-
-UINT32 TempBufferSize = 0;
-lpDeviceInfo->pAudioClient->GetBufferSize(&TempBufferSize);
-printf("INIT: Success; buffer size is %i [ %i ]\n",
-lpDeviceInfo->BufferSizeFrames, TempBufferSize);
-if (TempBufferSize != lpDeviceInfo->BufferSizeFrames) {
-printf("WARNING! Buffer sizes do not match!\n");
-}
-
-REFERENCE_TIME latency = 0;
-lpDeviceInfo->pAudioClient->GetStreamLatency(&latency);
-printf("Latency = %lli\n", latency);
-}
-
-// done
-retval = TRUE;
-
-done:
-if (pMMDeviceEnumerator != NULL) pMMDeviceEnumerator->Release();
-return retval;
-}
-*/
 
 BOOL rta_initialize_device_2(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags, WAVEFORMATEX* RequestedFormat) 
 {
@@ -591,13 +364,112 @@ done:
 	return retval;
 }
 
-void rta_capture_frames_rtwq(LPRTA_DEVICE_INFO lpCaptureDeviceInfo,
-	LPRTA_DEVICE_INFO lpRenderDeviceInfo, CAPTURE_DATA_HANDLER pHandler)
+void rta_render_frames_rtwq(LPRTA_DEVICE_INFO lpRenderDeviceInfo, RTA_DATA_HANDLER pHandler)
 {
 
 	HRESULT hr = 0;
-	//HANDLE hOutputWindowThread = INVALID_HANDLE_VALUE;
-	//HANDLE h[2] = { INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE };
+
+	if (lpRenderDeviceInfo == NULL) return;
+
+	last_error = NULL;
+
+	IAudioRenderClient *pAudioRenderClient = NULL;
+
+	RtaRenderAudioHandler *pRenderAudioHandler;
+	DWORD RtwqTaskId = 0;
+	IRtwqAsyncCallback *pAsyncCallback = NULL;
+
+	// instantiate a new audio handler
+	// creates a buffer event
+	pRenderAudioHandler = new RtaRenderAudioHandler();
+	if (pRenderAudioHandler == NULL) {
+		last_error = ERROR_23;
+		goto done;
+	}
+
+	// set the capture audio client event handle
+	// to the event handle generated in the rta audio handler
+	hr = lpRenderDeviceInfo->pAudioClient->SetEventHandle(
+		pRenderAudioHandler->GetBufferEventHandle());
+	CHKERR(hr, ERROR_10);
+
+	// get an audio capture client interface from the capture device
+	hr = lpRenderDeviceInfo->pAudioClient->GetService(__uuidof(IAudioRenderClient),
+		(void**)&pAudioRenderClient);
+	CHKERR(hr, ERROR_11);
+
+	// send the client interfaces, device info and handler routine pointer
+	// to the audio handler
+	pRenderAudioHandler->ConfigureClientInformation(
+		pAudioRenderClient, lpRenderDeviceInfo, pHandler);
+
+	// START rtwq
+
+	// start the real-time work queue
+	hr = RtwqStartup();
+	CHKERR(hr, ERROR_21);
+
+	// obtains and locks a shared work queue
+	hr = RtwqLockSharedWorkQueue(L"Audio", 0, &RtwqTaskId, &g_RtwqId);
+	CHKERR(hr, ERROR_22);
+
+	// qi a async callback from the audio handler
+	hr = pRenderAudioHandler->QueryInterface(__uuidof(IRtwqAsyncCallback), (void**)&pAsyncCallback);
+	CHKERR(hr, ERROR_24);
+
+	// From the docs:
+	// Creates an asynchronous result object. Use this function 
+	// if you are implementing an asynchronous method.
+	hr = pRenderAudioHandler->CreateAsyncResult();
+	CHKERR(hr, ERROR_25);
+
+	// From the docs:
+	// Queues a work item that waits for an event to be signaled.
+	hr = pRenderAudioHandler->PutWaitingWorkItem();
+	CHKERR(hr, ERROR_26);
+
+	// Create a stop event.
+	// Later, the method will block on this event.
+	// When the audio handler detemines that it
+	// is done, this event will be triggered
+	// causing this method to complete.
+	g_RtwqStop = CreateEvent(NULL, TRUE, FALSE, NULL);
+	if (g_RtwqStop == NULL) {
+		last_error = ERROR_9;
+		goto done;
+	}
+
+	// END rtwq
+
+	// start capture
+	hr = lpRenderDeviceInfo->pAudioClient->Start();
+	CHKERR(hr, ERROR_13);
+
+	// block and wait for handler to complete
+	printf("Waiting for stop signal...\n");
+	WaitForSingleObject(g_RtwqStop, INFINITE);
+
+	// stop capture and render
+	lpRenderDeviceInfo->pAudioClient->Stop();
+
+done:
+	if (last_error != NULL) printf("ERROR: %s\n", last_error);
+	if (0 != g_RtwqId) {
+		RtwqUnlockWorkQueue(g_RtwqId);
+		RtwqShutdown();
+	}
+	if (pAsyncCallback != NULL) pAsyncCallback->Release();
+	if (g_RtwqStop != NULL) CloseHandle(g_RtwqStop);
+	if (pAudioRenderClient != NULL) pAudioRenderClient->Release();
+	if (pRenderAudioHandler) pRenderAudioHandler->Release();
+
+}
+
+void rta_capture_frames_rtwq(LPRTA_DEVICE_INFO lpCaptureDeviceInfo,
+	LPRTA_DEVICE_INFO lpRenderDeviceInfo, RTA_DATA_HANDLER pHandler)
+{
+
+	HRESULT hr = 0;
 
 	if (lpCaptureDeviceInfo == NULL) return;
 
@@ -714,5 +586,5 @@ done:
 	if (g_RtwqStop != NULL) CloseHandle(g_RtwqStop);
 	if (pAudioCaptureClient != NULL) pAudioCaptureClient->Release();
 	if (pAudioRenderClient != NULL) pAudioRenderClient->Release();
-
+	if (pAudioHandler) pAudioHandler->Release();
 }

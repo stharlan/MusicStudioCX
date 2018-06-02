@@ -11,6 +11,7 @@ namespace MusicStudioCX
 	LPRTA_DEVICE_INFO CaptureDevInfo = nullptr;
 	LPRTA_DEVICE_INFO RenderDevInfo = nullptr;
 	HANDLE g_hCaptureThread = nullptr;
+	HANDLE g_hRenderThread = nullptr;
 	LPCWSTR STATUS_READY = L"Ready";
 
 	HWND hwndMainWindow = nullptr;
@@ -149,6 +150,83 @@ namespace MusicStudioCX
 
 	}
 
+	void RenderDataHandler(BYTE* buffer, UINT32 frameCount, BOOL* Cancel)
+	{
+		wchar_t msg[256];
+
+		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);
+		if (frameCount < (mctx->max_frames - mctx->frame_offset)) {
+
+			// for now, just copy from track zero to buffer
+			TrackContext* ctx = MusicStudioCX::get_track_context(mctx->tracks[0]);
+			FRAME* pFrame = (FRAME*)ctx->buffer;
+			memcpy(buffer, pFrame + mctx->frame_offset, frameCount * FRAME_SIZE);
+			//for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
+			//	if (mctx->tracks[TrackIndex] != nullptr) {
+			//		TrackContext* ctx = MusicStudioCX::get_track_context(mctx->tracks[TrackIndex]);
+			//		FRAME* pFrame = (FRAME*)ctx->buffer;
+			//		memcpy(pFrame + mctx->frame_offset, buffer, frameCount * FRAME_SIZE);
+			//	}
+			//}
+			mctx->frame_offset += frameCount;
+
+			FRAME* pOut = (FRAME*)buffer;
+			memset(msg, 0, 256 * sizeof(wchar_t));
+			swprintf_s(msg, 256, L"Render Data %i", mctx->frame_offset);
+			SendMessage(hwndStatus, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
+		}
+		else {
+			for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
+				TrackContext* ctx = MusicStudioCX::get_track_context(mctx->tracks[0]);
+				FRAME* pFrame = (FRAME*)ctx->buffer;
+				memcpy(buffer, pFrame + mctx->frame_offset, (mctx->max_frames - mctx->frame_offset) * FRAME_SIZE);
+				//if (mctx->tracks[TrackIndex] != nullptr) {
+				//	TrackContext* ctx = MusicStudioCX::get_track_context(mctx->tracks[TrackIndex]);
+				//	FRAME* pFrame = (FRAME*)ctx->buffer;
+				//	memcpy(pFrame + mctx->frame_offset, buffer, (mctx->max_frames - mctx->frame_offset) * FRAME_SIZE);
+				//}
+			}
+			mctx->frame_offset += (mctx->max_frames - mctx->frame_offset);
+
+			swprintf_s(msg, 256, L"Render Data; Done.");
+			SendMessage(hwndStatus, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
+			*Cancel = TRUE;
+		}
+	}
+
+	DWORD RenderThread(LPVOID lpThreadParameter)
+	{
+		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);
+		LPRTA_DEVICE_INFO devInfo = (LPRTA_DEVICE_INFO)lpThreadParameter;
+		rta_render_frames_rtwq(devInfo, RenderDataHandler);
+		return 0;
+	}
+
+	void StartPlayback()
+	{
+		wchar_t msg[256];
+		memset(msg, 0, 256 * sizeof(wchar_t));
+		swprintf_s(msg, 256, L"%i sps %i bps %i ch %zi szflt",
+			STD_FORMAT.nSamplesPerSec,
+			STD_FORMAT.wBitsPerSample,
+			STD_FORMAT.nChannels,
+			sizeof(float));
+		SendMessage(hwndStatus, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
+		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);
+		mctx->frame_offset = 0;
+		if (TRUE == rta_initialize_device_2(RenderDevInfo, AUDCLNT_STREAMFLAGS_EVENTCALLBACK, &STD_FORMAT))
+		{
+			if (g_hRenderThread) CloseHandle(g_hRenderThread);
+			g_hRenderThread = INVALID_HANDLE_VALUE;
+			g_hRenderThread = CreateThread(nullptr, (SIZE_T)0, RenderThread, (LPVOID)RenderDevInfo, 0, nullptr);
+		}
+	}
+
+	void StopPlayback()
+	{
+
+	}
+
 	void PopulateDeviceDropdown(EDataFlow dataFlow, HWND hDlg)
 	{
 		HWND cwnd = nullptr;
@@ -200,10 +278,13 @@ namespace MusicStudioCX
 				cwnd = GetDlgItem(hDlg, IDC_CMBINPUTIFX);
 				lr = SendMessage(cwnd, CB_GETCURSEL, 0, 0);
 				CaptureDevInfo = (LPRTA_DEVICE_INFO)SendMessage(cwnd, CB_GETITEMDATA, lr, 0);
+
 				cwnd = GetDlgItem(hDlg, IDC_CMBOUTPUTIFX);
 				lr = SendMessage(cwnd, CB_GETCURSEL, 0, 0);
 				RenderDevInfo = (LPRTA_DEVICE_INFO)SendMessage(cwnd, CB_GETITEMDATA, lr, 0);
+
 				EndDialog(hDlg, LOWORD(wParam));
+
 				return (INT_PTR)TRUE;
 			}
 			break;
@@ -302,6 +383,9 @@ namespace MusicStudioCX
 				case ID_TEST_STOP:
 					//StopRecording();
 					break;
+				case ID_TEST_STARTPLAY:
+					StartPlayback();
+					break;
 				default:
 					return DefWindowProc(hWnd, message, wParam, lParam);
 				}
@@ -322,6 +406,7 @@ namespace MusicStudioCX
 			// stop the thread, wait, and close
 			ctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
 			if (g_hCaptureThread) CloseHandle(g_hCaptureThread);
+			if (g_hRenderThread) CloseHandle(g_hRenderThread);
 			for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
 				if (ctx->tracks[TrackIndex] != nullptr) {
 					DestroyWindow(ctx->tracks[TrackIndex]);

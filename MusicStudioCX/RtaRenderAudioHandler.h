@@ -1,10 +1,9 @@
 #pragma once
-
-class RtaAudioHandler : public IRtwqAsyncCallback
+class RtaRenderAudioHandler : public IRtwqAsyncCallback
 {
 public:
-	RtaAudioHandler();
-	~RtaAudioHandler();
+	RtaRenderAudioHandler();
+	~RtaRenderAudioHandler();
 
 	STDMETHODIMP QueryInterface(REFIID riid, LPVOID* ppvObj);
 	STDMETHODIMP_(ULONG) AddRef();
@@ -16,15 +15,10 @@ public:
 	HRESULT CreateAsyncResult();
 	HRESULT PutWaitingWorkItem();
 	void ConfigureClientInformation(
-		IAudioCaptureClient *parmAudioCaptureClient,
-		LPRTA_DEVICE_INFO parmCaptureDeviceInfo,
 		IAudioRenderClient *parmAudioRenderClient,
 		LPRTA_DEVICE_INFO parmRenderDeviceInfo,
 		RTA_DATA_HANDLER parmDataHandlerCallback)
 	{
-		this->pAudioCaptureClient = parmAudioCaptureClient;
-		this->pAudioCaptureClient->AddRef();
-		this->lpCaptureDeviceInfo = parmCaptureDeviceInfo;
 		this->pHandler = parmDataHandlerCallback;
 		this->pAudioRenderClient = parmAudioRenderClient;
 		if (this->pAudioRenderClient != NULL)
@@ -39,18 +33,13 @@ private:
 	RTWQWORKITEM_KEY workItemKey;
 	IRtwqAsyncResult *pAsyncResult;
 
-	IAudioCaptureClient *pAudioCaptureClient;
 	IAudioRenderClient *pAudioRenderClient;
 
-	BYTE* pCapBuffer;
 	BYTE* pRenBuffer;
 	UINT32 FrameCount;
 	DWORD flags;
 
-	LPRTA_DEVICE_INFO lpCaptureDeviceInfo;
 	LPRTA_DEVICE_INFO lpRenderDeviceInfo;
 	RTA_DATA_HANDLER pHandler;
-
 };
-
 

@@ -152,6 +152,7 @@
     <ClInclude Include="MusicStudioCX.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="RtaAudioHandler.h" />
+    <ClInclude Include="RtaRenderAudioHandler.h" />
     <ClInclude Include="rta_impl.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="targetver.h" />
@@ -162,6 +163,7 @@
     <ClCompile Include="MainWindow.cpp" />
     <ClCompile Include="MusicStudioCX.cpp" />
     <ClCompile Include="RtaAudioHandler.cpp" />
+    <ClCompile Include="RtaRenderAudioHandler.cpp" />
     <ClCompile Include="rta_impl.cpp" />
     <ClCompile Include="stdafx.cpp">
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
