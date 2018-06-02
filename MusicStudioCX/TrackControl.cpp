@@ -12,11 +12,17 @@ namespace MusicStudioCX
 		case WM_NCCREATE:
 			// allocate context
 			ctx = (TrackContext*)malloc(sizeof(TrackContext));
+			// sixty seconds worth of samples
+			ctx->max_frames = SAMPLES_PER_SEC * 3;
+			ctx->frame_offset = 0;
+			ctx->buffer = (BYTE*)malloc(SAMPLES_PER_SEC * FRAME_SIZE * 3);
+			memset(ctx->buffer, 0, SAMPLES_PER_SEC * FRAME_SIZE * 3);
 			SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)ctx);
 			return TRUE;
 		case WM_NCDESTROY:
 			// free context
 			ctx = (TrackContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+			if (ctx->buffer) free(ctx->buffer);
 			if (ctx) free(ctx);
 			break;
 		case WM_PAINT:
@@ -25,6 +31,16 @@ namespace MusicStudioCX
 			HDC hdc = BeginPaint(hWnd, &ps);
 			// TODO: Add any drawing code that uses hdc here...
 			FillRect(hdc, &ps.rcPaint, (HBRUSH)GetStockObject(BLACK_BRUSH));
+			ctx = (TrackContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+			HPEN WhitePen = CreatePen(PS_SOLID, 1, RGB(255, 255, 255));
+			HGDIOBJ obj = SelectObject(hdc, WhitePen);
+			FRAME* pFrame = (FRAME*)ctx->buffer;
+			MoveToEx(hdc, 0, 64, nullptr);
+			for (UINT32 FrameCount = 0; FrameCount < ctx->max_frames; FrameCount+=100) {
+				LineTo(hdc, FrameCount / 100, (pFrame[FrameCount].left / 1024) + 64);
+			}
+			SelectObject(hdc, obj);
+			DeleteObject(WhitePen);
 			EndPaint(hWnd, &ps);
 		}
 		break;

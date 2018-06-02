@@ -68,6 +68,7 @@ void rta_free(LPVOID pvoid) {
 }
 
 UINT32 rta_list_supporting_devices_2(RTA_DEVICE_INFO** lppDeviceInfo,
+	WAVEFORMATEX *RequestedFormat,
 	DWORD StateMask, EDataFlow DataFlow, AUDCLNT_SHAREMODE ShareMode)
 {
 
@@ -104,65 +105,81 @@ UINT32 rta_list_supporting_devices_2(RTA_DEVICE_INFO** lppDeviceInfo,
 
 			if (SUCCEEDED(result)) {
 
-				// get device id; do not free when done
-				LPWSTR lpwstrDeviceId = NULL;
-				result = pMMDevice->GetId(&lpwstrDeviceId);
+				WORD MaxChannels = 0;
+				for (WORD NumChannels = 1; NumChannels < 17; NumChannels++) {
+					RequestedFormat->nChannels = NumChannels;
+					if (SUCCEEDED(pAudioClient3->IsFormatSupported(ShareMode, RequestedFormat, nullptr))) {
+						MaxChannels = NumChannels;
+					}
+				}
+				RequestedFormat->nChannels = MaxChannels;
 
 				if (SUCCEEDED(result)) {
 
-					// open prop store
-					IPropertyStore *pPropertyStore = NULL;
-					result = pMMDevice->OpenPropertyStore(STGM_READ, &pPropertyStore);
+					// get device id; do not free when done
+					LPWSTR lpwstrDeviceId = NULL;
+					result = pMMDevice->GetId(&lpwstrDeviceId);
 
 					if (SUCCEEDED(result)) {
 
-						// get name
-						PROPVARIANT varName;
-						PropVariantInit(&varName);
-						result = pPropertyStore->GetValue(
-							PKEY_Device_FriendlyName, &varName);
+						// open prop store
+						IPropertyStore *pPropertyStore = NULL;
+						result = pMMDevice->OpenPropertyStore(STGM_READ, &pPropertyStore);
 
 						if (SUCCEEDED(result)) {
 
-							PROPVARIANT varIsRaw;
-							PropVariantInit(&varIsRaw);
+							// get name
+							PROPVARIANT varName;
+							PropVariantInit(&varName);
 							result = pPropertyStore->GetValue(
-								PKEY_Devices_AudioDevice_RawProcessingSupported, &varIsRaw);
+								PKEY_Device_FriendlyName, &varName);
 
 							if (SUCCEEDED(result)) {
 
-								// create data structure
-								LPRTA_DEVICE_INFO lpdi = (LPRTA_DEVICE_INFO)rta_alloc(sizeof(RTA_DEVICE_INFO));
-								lpdi->DeviceId = lpwstrDeviceId;
-								lpdi->DeviceName = _wcsdup(varName.pwszVal);
-								//lpdi->ShareMode = ShareMode;
-								//lpdi->lpWaveFormatEx = lpWaveFormatEx;
-								lpdi->IsRawSupported = varIsRaw.boolVal;
+								PROPVARIANT varIsRaw;
+								PropVariantInit(&varIsRaw);
+								result = pPropertyStore->GetValue(
+									PKEY_Devices_AudioDevice_RawProcessingSupported, &varIsRaw);
 
-								//printf("==========\n");
-								//wprintf(L"%s\n", varName.pwszVal);
-								//printf("channels %i\n", defFmt->nChannels);
-								//printf("samples per sec %i\n", defFmt->nSamplesPerSec);
-								//printf("bits per samples %i\n", defFmt->wBitsPerSample);
-								//printf("RAW is %ssupported.\n",
-								//	(varIsRaw.boolVal == VARIANT_FALSE ? "NOT " : ""));
-								//printf("==========\n");
+								if (SUCCEEDED(result)) {
 
-								if (*lppDeviceInfo == NULL) *lppDeviceInfo = lpdi;
-								if (current != NULL) current->pNext = lpdi;
-								current = lpdi;
-								count++;
+									// create data structure
+									LPRTA_DEVICE_INFO lpdi = (LPRTA_DEVICE_INFO)rta_alloc(sizeof(RTA_DEVICE_INFO));
+									lpdi->DeviceId = lpwstrDeviceId;
+									lpdi->DeviceName = _wcsdup(varName.pwszVal);
+									//lpdi->ShareMode = ShareMode;
+									//lpdi->lpWaveFormatEx = lpWaveFormatEx;
+									lpdi->IsRawSupported = varIsRaw.boolVal;
 
-								PropVariantClear(&varIsRaw);
+									//printf("==========\n");
+									//wprintf(L"%s\n", varName.pwszVal);
+									//printf("channels %i\n", defFmt->nChannels);
+									//printf("samples per sec %i\n", defFmt->nSamplesPerSec);
+									//printf("bits per samples %i\n", defFmt->wBitsPerSample);
+									//printf("RAW is %ssupported.\n",
+									//	(varIsRaw.boolVal == VARIANT_FALSE ? "NOT " : ""));
+									//printf("==========\n");
+
+									//lpdi->dwSamplesPerSec = nativeFormat->nSamplesPerSec;
+									//lpdi->wBitsPerSample = nativeFormat->wBitsPerSample;
+									//lpdi->wChannels = nativeFormat->nChannels;
+
+									if (*lppDeviceInfo == NULL) *lppDeviceInfo = lpdi;
+									if (current != NULL) current->pNext = lpdi;
+									current = lpdi;
+									count++;
+
+									PropVariantClear(&varIsRaw);
+
+								}
+
+								PropVariantClear(&varName);
 
 							}
 
-							PropVariantClear(&varName);
-
+							pPropertyStore->Release();
+							pPropertyStore = NULL;
 						}
-
-						pPropertyStore->Release();
-						pPropertyStore = NULL;
 					}
 				}
 				pAudioClient3->Release();
@@ -423,7 +440,8 @@ return retval;
 }
 */
 
-BOOL rta_initialize_device_2(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags) {
+BOOL rta_initialize_device_2(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags, WAVEFORMATEX* RequestedFormat) 
+{
 
 	last_error = NULL;
 	UINT32 PeriodToUse = 0;
@@ -470,18 +488,23 @@ BOOL rta_initialize_device_2(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags) 
 		printf("NOTE: RAW is not supported for this device.\n");
 	}
 
-	WAVEFORMATEX *nativeFormat = NULL;
-	result = pAudioClient3->GetMixFormat(&nativeFormat);
-	CHKERR(result, ERROR_28);
+	WAVEFORMATEX *FormatToUse = NULL;
+	if (RequestedFormat != nullptr) {
+		FormatToUse = RequestedFormat;
+	}
+	else {
+		result = pAudioClient3->GetMixFormat(&FormatToUse);
+		CHKERR(result, ERROR_28);
+	}
 
-	printf("Native Samples Per Sec %i\n", nativeFormat->nSamplesPerSec);
-	printf("Native Sample Size %i\n", nativeFormat->wBitsPerSample);
-	printf("Native Channels %i\n", nativeFormat->nChannels);
-	printf("Wave Format Tag %x\n", nativeFormat->wFormatTag);
-	printf("Extra Data Size %i\n", nativeFormat->cbSize);
-	if (nativeFormat->wFormatTag == WAVE_FORMAT_EXTENSIBLE) {
+	printf("Native Samples Per Sec %i\n", FormatToUse->nSamplesPerSec);
+	printf("Native Sample Size %i\n", FormatToUse->wBitsPerSample);
+	printf("Native Channels %i\n", FormatToUse->nChannels);
+	printf("Wave Format Tag %x\n", FormatToUse->wFormatTag);
+	printf("Extra Data Size %i\n", FormatToUse->cbSize);
+	if (FormatToUse->wFormatTag == WAVE_FORMAT_EXTENSIBLE) {
 
-		WAVEFORMATEXTENSIBLE* lpwfex = (WAVEFORMATEXTENSIBLE*)nativeFormat;
+		WAVEFORMATEXTENSIBLE* lpwfex = (WAVEFORMATEXTENSIBLE*)FormatToUse;
 
 		printf("EXT Channel Mask %i; Channel Configuration:\n", lpwfex->dwChannelMask);
 		for (DWORD chid = 1; chid < 0x40000; chid *= 2) {
@@ -503,14 +526,14 @@ BOOL rta_initialize_device_2(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags) 
 			goto done;
 		}
 	}
-	else {
-		printf("ERROR: EXT Other format. This program is written to only support IEEE Float data.\n");
-		goto done;
-	}
+	//else {
+		//printf("ERROR: EXT Other format. This program is written to only support IEEE Float data.\n");
+		//goto done;
+	//}
 
 	UINT32 DefPeriodInFrames, p2, MinPeriodInFrames, p4;
 	result = pAudioClient3->GetSharedModeEnginePeriod(
-		nativeFormat, &DefPeriodInFrames, &p2, &MinPeriodInFrames, &p4);
+		FormatToUse, &DefPeriodInFrames, &p2, &MinPeriodInFrames, &p4);
 	CHKERR(result, ERROR_29);
 	printf("Def Period in Frames %i\n", DefPeriodInFrames);
 	printf("Fnd Period in Frames %i\n", p2);
@@ -522,7 +545,7 @@ BOOL rta_initialize_device_2(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags) 
 	result = pAudioClient3->InitializeSharedAudioStream(
 		StreamFlags,
 		PeriodToUse,
-		nativeFormat,
+		FormatToUse,
 		nullptr);
 
 	if (FAILED(result))
@@ -536,9 +559,9 @@ BOOL rta_initialize_device_2(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags) 
 		printf("NOTE: Init is successful\n");
 
 		lpDeviceInfo->BufferSizeFrames = PeriodToUse;
-		lpDeviceInfo->SizeOfFrame = nativeFormat->nChannels *
-			(nativeFormat->wBitsPerSample / 8);
-		lpDeviceInfo->nChannels = nativeFormat->nChannels;
+		lpDeviceInfo->SizeOfFrame = FormatToUse->nChannels *
+			(FormatToUse->wBitsPerSample / 8);
+		//lpDeviceInfo->wChannels = FormatToUse->nChannels;
 
 		lpDeviceInfo->FrameBuffer = (BYTE*)rta_alloc(
 			lpDeviceInfo->BufferSizeFrames * lpDeviceInfo->SizeOfFrame);
