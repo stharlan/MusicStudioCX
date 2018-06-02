@@ -25,5 +25,6 @@ namespace MusicStudioCX
 
 	void initialize_track_window();
 	HWND create_track_window(HWND parent, LPCWSTR TrackName);
+	TrackContext* GetTrackContext(HWND cwnd);
 
 }

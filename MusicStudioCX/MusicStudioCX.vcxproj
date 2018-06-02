@@ -148,6 +148,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="CXAudio.h" />
+    <ClInclude Include="MainWindow.h" />
     <ClInclude Include="MusicStudioCX.h" />
     <ClInclude Include="Resource.h" />
     <ClInclude Include="RtaAudioHandler.h" />
@@ -158,6 +159,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="CXAudio.cpp" />
+    <ClCompile Include="MainWindow.cpp" />
     <ClCompile Include="MusicStudioCX.cpp" />
     <ClCompile Include="RtaAudioHandler.cpp" />
     <ClCompile Include="rta_impl.cpp" />
