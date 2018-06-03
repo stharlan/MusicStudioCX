@@ -81,7 +81,7 @@ namespace MusicStudioCX
 					//FRAME2CHSHORT* pFrame = (FRAME2CHSHORT*)ctx->buffer;
 					//memcpy(pFrame + mctx->frame_offset, buffer, frameCount * FRAME_SIZE);
 					for (UINT32 FrameIndex = 0; FrameIndex < frameCount; FrameIndex++) {
-						ctx->monobuffershort[mctx->frame_offset + FrameIndex] = CapturedDataBuffer[FrameIndex].left;
+						ctx->monobuffershort[mctx->frame_offset + FrameIndex] = CapturedDataBuffer[FrameIndex].channel[ctx->channelIndex];
 					}
 				}
 			}
@@ -100,7 +100,7 @@ namespace MusicStudioCX
 					//memcpy(pFrame + mctx->frame_offset, buffer, (mctx->max_frames - mctx->frame_offset) * FRAME_SIZE);
 					UINT32 nFrames = mctx->max_frames - mctx->frame_offset;
 					for (UINT32 FrameIndex = 0; FrameIndex < nFrames; FrameIndex++) {
-						ctx->monobuffershort[mctx->frame_offset + FrameIndex] = CapturedDataBuffer[FrameIndex].left;
+						ctx->monobuffershort[mctx->frame_offset + FrameIndex] = CapturedDataBuffer[FrameIndex].channel[ctx->channelIndex];
 					}
 				}
 			}
@@ -174,8 +174,7 @@ namespace MusicStudioCX
 			//FRAME2CHSHORT* pFrame = (FRAME2CHSHORT*)ctx->buffer;
 			//memcpy(buffer, pFrame + mctx->frame_offset, frameCount * FRAME_SIZE);
 			for (UINT32 FrameIndex = 0; FrameIndex < frameCount; FrameIndex++) {
-				CapturedDataBuffer[FrameIndex].left = ctx->monobuffershort[mctx->frame_offset + FrameIndex];
-				CapturedDataBuffer[FrameIndex].right = ctx->monobuffershort[mctx->frame_offset + FrameIndex];
+				CapturedDataBuffer[FrameIndex].channel[ctx->channelIndex] = ctx->monobuffershort[mctx->frame_offset + FrameIndex];
 			}
 			//for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
 			//	if (mctx->tracks[TrackIndex] != nullptr) {
@@ -198,8 +197,7 @@ namespace MusicStudioCX
 			//memcpy(buffer, pFrame + mctx->frame_offset, (mctx->max_frames - mctx->frame_offset) * FRAME_SIZE);
 			UINT32 nFrames = mctx->max_frames - mctx->frame_offset;
 			for (UINT32 FrameIndex = 0; FrameIndex < nFrames; FrameIndex++) {
-				CapturedDataBuffer[FrameIndex].left = ctx->monobuffershort[mctx->frame_offset + FrameIndex];
-				CapturedDataBuffer[FrameIndex].right = ctx->monobuffershort[mctx->frame_offset + FrameIndex];
+				CapturedDataBuffer[FrameIndex].channel[ctx->channelIndex] = ctx->monobuffershort[mctx->frame_offset + FrameIndex];
 			}
 			//if (mctx->tracks[TrackIndex] != nullptr) {
 			//	TrackContext* ctx = MusicStudioCX::get_track_context(mctx->tracks[TrackIndex]);

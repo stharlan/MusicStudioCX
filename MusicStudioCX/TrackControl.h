@@ -13,11 +13,11 @@
 
 typedef struct {
 	short* monobuffershort;
+	short channelIndex;
 } TrackContext;
 
 typedef struct {
-	short left;
-	short right;
+	short channel[2];
 } FRAME2CHSHORT;
 
 typedef short SAMPLESHORT;

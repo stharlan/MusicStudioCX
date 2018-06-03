@@ -15,6 +15,7 @@ namespace MusicStudioCX
 			ctx = (TrackContext*)malloc(sizeof(TrackContext));
 			mctx = (MainWindowContext*)GetWindowLongPtr(GetParent(hWnd), GWLP_USERDATA);
 			// sixty seconds worth of samples
+			ctx->channelIndex = 0;
 			ctx->monobuffershort = (short*)malloc(SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
 			memset(ctx->monobuffershort, 0, SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
 
