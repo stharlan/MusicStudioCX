@@ -4,19 +4,23 @@
 #define STATUS_BAR_ID 9801
 #define SAMPLES_PER_SEC 48000
 #define BITS_PER_SAMPLE 16
+#define BYTES_PER_SAMPLE BITS_PER_SAMPLE / 8
+#define SAMPLE_SIZE BITS_PER_SAMPLE / 8
 #define NUM_CHANNELS 2
 #define BLOCK_ALIGN (NUM_CHANNELS * BITS_PER_SAMPLE) / 8
 #define FRAME_SIZE BLOCK_ALIGN
 #define AVG_BYTES_PER_SEC BLOCK_ALIGN * SAMPLES_PER_SEC
 
 typedef struct {
-	BYTE* buffer;
+	short* monobuffershort;
 } TrackContext;
 
 typedef struct {
 	short left;
 	short right;
-} FRAME;
+} FRAME2CHSHORT;
+
+typedef short SAMPLESHORT;
 
 namespace MusicStudioCX
 {

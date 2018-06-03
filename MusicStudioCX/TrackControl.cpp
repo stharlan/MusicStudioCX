@@ -15,13 +15,14 @@ namespace MusicStudioCX
 			ctx = (TrackContext*)malloc(sizeof(TrackContext));
 			mctx = (MainWindowContext*)GetWindowLongPtr(GetParent(hWnd), GWLP_USERDATA);
 			// sixty seconds worth of samples
-			ctx->buffer = (BYTE*)malloc(SAMPLES_PER_SEC * FRAME_SIZE * mctx->rec_time_seconds);
-			memset(ctx->buffer, 0, SAMPLES_PER_SEC * FRAME_SIZE * mctx->rec_time_seconds);
+			ctx->monobuffershort = (short*)malloc(SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
+			memset(ctx->monobuffershort, 0, SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
 
 			// fill it with a 440 hz sine wave
-			for (UINT32 f = 0; f < SAMPLES_PER_SEC * mctx->rec_time_seconds; f++) {
-				(((FRAME*)ctx->buffer) + f)->left = (short)(sinf((float)f / ((float)SAMPLES_PER_SEC / 440.0f) * 2.0f * 3.14159f) * 32767.0f);
-				(((FRAME*)ctx->buffer) + f)->right = (((FRAME*)ctx->buffer) + f)->left; 
+			for (UINT32 sample = 0; sample < SAMPLES_PER_SEC * mctx->rec_time_seconds; sample++) {
+				//(((FRAME*)ctx->buffer) + f)->left = (short)(sinf((float)f / ((float)SAMPLES_PER_SEC / 440.0f) * 2.0f * 3.14159f) * 32767.0f);
+				//(((FRAME*)ctx->buffer) + f)->right = (((FRAME*)ctx->buffer) + f)->left; 
+				ctx->monobuffershort[sample] = (short)(sinf((float)sample / ((float)SAMPLES_PER_SEC / 440.0f) * 2.0f * 3.14159f) * 32767.0f);
 			}
 
 			SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)ctx);
@@ -29,7 +30,7 @@ namespace MusicStudioCX
 		case WM_NCDESTROY:
 			// free context
 			ctx = get_track_context(hWnd);
-			if (ctx->buffer) free(ctx->buffer);
+			if (ctx->monobuffershort) free(ctx->monobuffershort);
 			if (ctx) free(ctx);
 			break;
 		case WM_PAINT:
@@ -44,7 +45,9 @@ namespace MusicStudioCX
 			ctx = get_track_context(hWnd);
 			HPEN GreenPen = CreatePen(PS_SOLID, 1, RGB(0, 255, 0));
 			HGDIOBJ obj = SelectObject(hdc, GreenPen);
-			FRAME* pFrame = (FRAME*)ctx->buffer;
+			//FRAME* pFrame = (FRAME*)ctx->buffer;
+			//SAMPLESHORT* pSample = (SAMPLESHORT*)ctx->monobuffer;
+
 			MoveToEx(hdc, 0, 64, nullptr);
 
 			// get scroll bar pos
@@ -54,7 +57,8 @@ namespace MusicStudioCX
 			for (UINT32 FrameCount = StartFrame; FrameCount < mctx->max_frames; FrameCount += mctx->zoom_mult) {
 				rpos = (FrameCount - StartFrame) / mctx->zoom_mult;
 				if (rpos > (UINT32)r.right) break;
-				LineTo(hdc, rpos, (pFrame[FrameCount].left / 512) + 64);
+				//LineTo(hdc, rpos, (pFrame[FrameCount].left / 512) + 64);
+				LineTo(hdc, rpos, (ctx->monobuffershort[FrameCount] / 512) + 64);
 			}
 			SelectObject(hdc, obj);
 			DeleteObject(GreenPen);

@@ -70,14 +70,19 @@ namespace MusicStudioCX
 	void CaptureDataHandler(BYTE* buffer, UINT32 frameCount, BOOL* Cancel)
 	{
 		wchar_t msg[256];
+		FRAME2CHSHORT *CapturedDataBuffer = (FRAME2CHSHORT*)buffer;
 
 		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);
 		if (frameCount < (mctx->max_frames - mctx->frame_offset)) {
 			for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
 				if (mctx->tracks[TrackIndex] != nullptr) {
 					TrackContext* ctx = MusicStudioCX::get_track_context(mctx->tracks[TrackIndex]);
-					FRAME* pFrame = (FRAME*)ctx->buffer;
-					memcpy(pFrame + mctx->frame_offset, buffer, frameCount * FRAME_SIZE);
+					//SAMPLESHORT* TargetBuffer = (SAMPLESHORT*)ctx->monobuffer;
+					//FRAME2CHSHORT* pFrame = (FRAME2CHSHORT*)ctx->buffer;
+					//memcpy(pFrame + mctx->frame_offset, buffer, frameCount * FRAME_SIZE);
+					for (UINT32 FrameIndex = 0; FrameIndex < frameCount; FrameIndex++) {
+						ctx->monobuffershort[mctx->frame_offset + FrameIndex] = CapturedDataBuffer[FrameIndex].left;
+					}
 				}
 			}
 			mctx->frame_offset += frameCount;
@@ -90,8 +95,13 @@ namespace MusicStudioCX
 			for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
 				if (mctx->tracks[TrackIndex] != nullptr) {
 					TrackContext* ctx = MusicStudioCX::get_track_context(mctx->tracks[TrackIndex]);
-					FRAME* pFrame = (FRAME*)ctx->buffer;
-					memcpy(pFrame + mctx->frame_offset, buffer, (mctx->max_frames - mctx->frame_offset) * FRAME_SIZE);
+					//SAMPLESHORT* TargetBuffer = (SAMPLESHORT*)ctx->monobuffer;
+					//FRAME2CHSHORT* pFrame = (FRAME2CHSHORT*)ctx->buffer;
+					//memcpy(pFrame + mctx->frame_offset, buffer, (mctx->max_frames - mctx->frame_offset) * FRAME_SIZE);
+					UINT32 nFrames = mctx->max_frames - mctx->frame_offset;
+					for (UINT32 FrameIndex = 0; FrameIndex < nFrames; FrameIndex++) {
+						ctx->monobuffershort[mctx->frame_offset + FrameIndex] = CapturedDataBuffer[FrameIndex].left;
+					}
 				}
 			}
 			mctx->frame_offset += (mctx->max_frames - mctx->frame_offset);
@@ -153,14 +163,20 @@ namespace MusicStudioCX
 	void RenderDataHandler(BYTE* buffer, UINT32 frameCount, BOOL* Cancel)
 	{
 		wchar_t msg[256];
+		FRAME2CHSHORT *CapturedDataBuffer = (FRAME2CHSHORT*)buffer;
 
 		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);
 		if (frameCount < (mctx->max_frames - mctx->frame_offset)) {
 
 			// for now, just copy from track zero to buffer
 			TrackContext* ctx = MusicStudioCX::get_track_context(mctx->tracks[0]);
-			FRAME* pFrame = (FRAME*)ctx->buffer;
-			memcpy(buffer, pFrame + mctx->frame_offset, frameCount * FRAME_SIZE);
+			//SAMPLESHORT* SourceBuffer = (SAMPLESHORT*)ctx->monobuffer;
+			//FRAME2CHSHORT* pFrame = (FRAME2CHSHORT*)ctx->buffer;
+			//memcpy(buffer, pFrame + mctx->frame_offset, frameCount * FRAME_SIZE);
+			for (UINT32 FrameIndex = 0; FrameIndex < frameCount; FrameIndex++) {
+				CapturedDataBuffer[FrameIndex].left = ctx->monobuffershort[mctx->frame_offset + FrameIndex];
+				CapturedDataBuffer[FrameIndex].right = ctx->monobuffershort[mctx->frame_offset + FrameIndex];
+			}
 			//for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
 			//	if (mctx->tracks[TrackIndex] != nullptr) {
 			//		TrackContext* ctx = MusicStudioCX::get_track_context(mctx->tracks[TrackIndex]);
@@ -170,22 +186,26 @@ namespace MusicStudioCX
 			//}
 			mctx->frame_offset += frameCount;
 
-			FRAME* pOut = (FRAME*)buffer;
+			FRAME2CHSHORT* pOut = (FRAME2CHSHORT*)buffer;
 			memset(msg, 0, 256 * sizeof(wchar_t));
 			swprintf_s(msg, 256, L"Render Data %i", mctx->frame_offset);
 			SendMessage(hwndStatus, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
 		}
 		else {
-			for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
-				TrackContext* ctx = MusicStudioCX::get_track_context(mctx->tracks[0]);
-				FRAME* pFrame = (FRAME*)ctx->buffer;
-				memcpy(buffer, pFrame + mctx->frame_offset, (mctx->max_frames - mctx->frame_offset) * FRAME_SIZE);
-				//if (mctx->tracks[TrackIndex] != nullptr) {
-				//	TrackContext* ctx = MusicStudioCX::get_track_context(mctx->tracks[TrackIndex]);
-				//	FRAME* pFrame = (FRAME*)ctx->buffer;
-				//	memcpy(pFrame + mctx->frame_offset, buffer, (mctx->max_frames - mctx->frame_offset) * FRAME_SIZE);
-				//}
+			TrackContext* ctx = MusicStudioCX::get_track_context(mctx->tracks[0]);
+			//SAMPLESHORT* SourceBuffer = (SAMPLESHORT*)ctx->monobuffer;
+			//FRAME2CHSHORT* pFrame = (FRAME2CHSHORT*)ctx->buffer;
+			//memcpy(buffer, pFrame + mctx->frame_offset, (mctx->max_frames - mctx->frame_offset) * FRAME_SIZE);
+			UINT32 nFrames = mctx->max_frames - mctx->frame_offset;
+			for (UINT32 FrameIndex = 0; FrameIndex < nFrames; FrameIndex++) {
+				CapturedDataBuffer[FrameIndex].left = ctx->monobuffershort[mctx->frame_offset + FrameIndex];
+				CapturedDataBuffer[FrameIndex].right = ctx->monobuffershort[mctx->frame_offset + FrameIndex];
 			}
+			//if (mctx->tracks[TrackIndex] != nullptr) {
+			//	TrackContext* ctx = MusicStudioCX::get_track_context(mctx->tracks[TrackIndex]);
+			//	FRAME* pFrame = (FRAME*)ctx->buffer;
+			//	memcpy(pFrame + mctx->frame_offset, buffer, (mctx->max_frames - mctx->frame_offset) * FRAME_SIZE);
+			//}
 			mctx->frame_offset += (mctx->max_frames - mctx->frame_offset);
 
 			swprintf_s(msg, 256, L"Render Data; Done.");
