@@ -77,9 +77,6 @@ namespace MusicStudioCX
 			for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
 				if (mctx->tracks[TrackIndex] != nullptr) {
 					TrackContext* ctx = MusicStudioCX::get_track_context(mctx->tracks[TrackIndex]);
-					//SAMPLESHORT* TargetBuffer = (SAMPLESHORT*)ctx->monobuffer;
-					//FRAME2CHSHORT* pFrame = (FRAME2CHSHORT*)ctx->buffer;
-					//memcpy(pFrame + mctx->frame_offset, buffer, frameCount * FRAME_SIZE);
 					for (UINT32 FrameIndex = 0; FrameIndex < frameCount; FrameIndex++) {
 						ctx->monobuffershort[mctx->frame_offset + FrameIndex] = CapturedDataBuffer[FrameIndex].channel[ctx->channelIndex];
 					}
@@ -95,9 +92,6 @@ namespace MusicStudioCX
 			for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
 				if (mctx->tracks[TrackIndex] != nullptr) {
 					TrackContext* ctx = MusicStudioCX::get_track_context(mctx->tracks[TrackIndex]);
-					//SAMPLESHORT* TargetBuffer = (SAMPLESHORT*)ctx->monobuffer;
-					//FRAME2CHSHORT* pFrame = (FRAME2CHSHORT*)ctx->buffer;
-					//memcpy(pFrame + mctx->frame_offset, buffer, (mctx->max_frames - mctx->frame_offset) * FRAME_SIZE);
 					UINT32 nFrames = mctx->max_frames - mctx->frame_offset;
 					for (UINT32 FrameIndex = 0; FrameIndex < nFrames; FrameIndex++) {
 						ctx->monobuffershort[mctx->frame_offset + FrameIndex] = CapturedDataBuffer[FrameIndex].channel[ctx->channelIndex];
@@ -123,14 +117,6 @@ namespace MusicStudioCX
 				InvalidateRect(mctx->tracks[TrackIndex], nullptr, TRUE);
 			}
 		}
-
-		//std::ofstream wave_dbg_out("c:\\temp\\wave_debug_out.txt");
-		//TrackContext* ctx = (TrackContext*)GetWindowLongPtr(HwndTrackTest, GWLP_USERDATA);
-		//FRAME* pFrame = (FRAME*)ctx->buffer;
-		//for (UINT32 FrameCount = 0; FrameCount < 500; FrameCount++) {
-		//wave_dbg_out << "left: " << pFrame[FrameCount].left
-		//<< "; right: " << pFrame[FrameCount].right << std::endl;
-		//}
 
 		return 0;
 	}
@@ -169,20 +155,11 @@ namespace MusicStudioCX
 		if (frameCount < (mctx->max_frames - mctx->frame_offset)) {
 
 			// for now, just copy from track zero to buffer
+			// need to mix all channels
 			TrackContext* ctx = MusicStudioCX::get_track_context(mctx->tracks[0]);
-			//SAMPLESHORT* SourceBuffer = (SAMPLESHORT*)ctx->monobuffer;
-			//FRAME2CHSHORT* pFrame = (FRAME2CHSHORT*)ctx->buffer;
-			//memcpy(buffer, pFrame + mctx->frame_offset, frameCount * FRAME_SIZE);
 			for (UINT32 FrameIndex = 0; FrameIndex < frameCount; FrameIndex++) {
 				CapturedDataBuffer[FrameIndex].channel[ctx->channelIndex] = ctx->monobuffershort[mctx->frame_offset + FrameIndex];
 			}
-			//for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
-			//	if (mctx->tracks[TrackIndex] != nullptr) {
-			//		TrackContext* ctx = MusicStudioCX::get_track_context(mctx->tracks[TrackIndex]);
-			//		FRAME* pFrame = (FRAME*)ctx->buffer;
-			//		memcpy(pFrame + mctx->frame_offset, buffer, frameCount * FRAME_SIZE);
-			//	}
-			//}
 			mctx->frame_offset += frameCount;
 
 			FRAME2CHSHORT* pOut = (FRAME2CHSHORT*)buffer;
@@ -191,19 +168,13 @@ namespace MusicStudioCX
 			SendMessage(hwndStatus, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
 		}
 		else {
+			// for now, just copy from track zero to buffer
+			// need to mix all channels
 			TrackContext* ctx = MusicStudioCX::get_track_context(mctx->tracks[0]);
-			//SAMPLESHORT* SourceBuffer = (SAMPLESHORT*)ctx->monobuffer;
-			//FRAME2CHSHORT* pFrame = (FRAME2CHSHORT*)ctx->buffer;
-			//memcpy(buffer, pFrame + mctx->frame_offset, (mctx->max_frames - mctx->frame_offset) * FRAME_SIZE);
 			UINT32 nFrames = mctx->max_frames - mctx->frame_offset;
 			for (UINT32 FrameIndex = 0; FrameIndex < nFrames; FrameIndex++) {
 				CapturedDataBuffer[FrameIndex].channel[ctx->channelIndex] = ctx->monobuffershort[mctx->frame_offset + FrameIndex];
 			}
-			//if (mctx->tracks[TrackIndex] != nullptr) {
-			//	TrackContext* ctx = MusicStudioCX::get_track_context(mctx->tracks[TrackIndex]);
-			//	FRAME* pFrame = (FRAME*)ctx->buffer;
-			//	memcpy(pFrame + mctx->frame_offset, buffer, (mctx->max_frames - mctx->frame_offset) * FRAME_SIZE);
-			//}
 			mctx->frame_offset += (mctx->max_frames - mctx->frame_offset);
 
 			swprintf_s(msg, 256, L"Render Data; Done.");
@@ -459,6 +430,13 @@ namespace MusicStudioCX
 					}
 				}
 				break;
+			}
+			break;
+		case WM_SIZE:
+			SendMessage(hwndStatus, WM_SIZE, wParam, lParam);
+			ctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+			for (int i = 0; i < 16; i++) {
+				if (ctx->tracks != nullptr) SendMessage(ctx->tracks[i], WM_SIZE, wParam, lParam);
 			}
 			break;
 		default:

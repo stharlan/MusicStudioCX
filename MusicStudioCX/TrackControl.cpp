@@ -66,6 +66,9 @@ namespace MusicStudioCX
 			EndPaint(hWnd, &ps);
 		}
 		break;
+		case WM_SIZE:
+			SetWindowPos(hWnd, nullptr, 0, 0, LOWORD(lParam), 128, SWP_NOMOVE|SWP_NOZORDER);
+			break;
 		default:
 			return DefWindowProc(hWnd, message, wParam, lParam);
 		}
