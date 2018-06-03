@@ -148,6 +148,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="CXAudio.h" />
+    <ClInclude Include="CxCommon.h" />
     <ClInclude Include="MainWindow.h" />
     <ClInclude Include="MusicStudioCX.h" />
     <ClInclude Include="Resource.h" />

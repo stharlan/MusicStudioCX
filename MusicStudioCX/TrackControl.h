@@ -14,6 +14,7 @@
 typedef struct {
 	short* monobuffershort;
 	short channelIndex;
+	UINT32 state;
 } TrackContext;
 
 typedef struct {

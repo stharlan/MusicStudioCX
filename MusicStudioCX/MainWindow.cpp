@@ -50,23 +50,6 @@ namespace MusicStudioCX
 		SendMessage(hwndStatus, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)STATUS_READY);
 	}
 
-	HWND CreateButton(HWND hWnd, int x, int y, int w, int h, const wchar_t* text, DWORD btnId)
-	{
-		HWND hwndButton = CreateWindow(
-			L"BUTTON",  // Predefined class; Unicode assumed 
-			text,      // Button text 
-			WS_TABSTOP | WS_VISIBLE | WS_CHILD | BS_DEFPUSHBUTTON,  // Styles 
-			x,         // x position 
-			y,         // y position 
-			w,        // Button width
-			h,        // Button height
-			hWnd,     // Parent window
-			(HMENU)btnId,       // No menu.
-			GetModuleHandle(nullptr),
-			NULL);      // Pointer not needed.
-		return hwndButton;
-	}
-
 	void CaptureDataHandler(BYTE* buffer, UINT32 frameCount, BOOL* Cancel)
 	{
 		wchar_t msg[256];
@@ -114,7 +97,7 @@ namespace MusicStudioCX
 
 		for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
 			if (mctx->tracks[TrackIndex] != nullptr) {
-				InvalidateRect(mctx->tracks[TrackIndex], nullptr, TRUE);
+				InvalidateRect(mctx->tracks[TrackIndex], nullptr, FALSE);
 			}
 		}
 
@@ -339,7 +322,7 @@ namespace MusicStudioCX
 				if (ctx->zoom_mult > 1) ctx->zoom_mult /= 2;
 				for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
 					if (ctx->tracks[TrackIndex] != nullptr) {
-						InvalidateRect(ctx->tracks[TrackIndex], nullptr, TRUE);
+						InvalidateRect(ctx->tracks[TrackIndex], nullptr, FALSE);
 					}
 				}
 			}
@@ -348,7 +331,7 @@ namespace MusicStudioCX
 				ctx->zoom_mult *= 2;
 				for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
 					if (ctx->tracks[TrackIndex] != nullptr) {
-						InvalidateRect(ctx->tracks[TrackIndex], nullptr, TRUE);
+						InvalidateRect(ctx->tracks[TrackIndex], nullptr, FALSE);
 					}
 				}
 			}
@@ -416,7 +399,7 @@ namespace MusicStudioCX
 				ctx->scroll_pos = HIWORD(wParam);
 				for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
 					if (ctx->tracks[TrackIndex] != nullptr) {
-						InvalidateRect(ctx->tracks[TrackIndex], nullptr, TRUE);
+						InvalidateRect(ctx->tracks[TrackIndex], nullptr, FALSE);
 					}
 				}
 				break;
@@ -426,7 +409,7 @@ namespace MusicStudioCX
 				ctx->scroll_pos = HIWORD(wParam);
 				for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
 					if (ctx->tracks[TrackIndex] != nullptr) {
-						InvalidateRect(ctx->tracks[TrackIndex], nullptr, TRUE);
+						InvalidateRect(ctx->tracks[TrackIndex], nullptr, FALSE);
 					}
 				}
 				break;
@@ -475,8 +458,8 @@ namespace MusicStudioCX
 			CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
 		CreateStatusBar(hwndMainWindow);
 
-		ZoomInButton = CreateButton(hwndMainWindow, 0, 0, 64, 32, L"ZIN", 1);
-		ZoomOutButton = CreateButton(hwndMainWindow, 64, 0, 64, 32, L"ZOUT", 2);
+		ZoomInButton = CXCommon::CreateButton(hwndMainWindow, 0, 0, 64, 32, L"ZIN", 1);
+		ZoomOutButton = CXCommon::CreateButton(hwndMainWindow, 64, 0, 64, 32, L"ZOUT", 2);
 
 		// set scroll bar info
 		MainWindowContext* ctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);
