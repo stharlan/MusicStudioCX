@@ -85,26 +85,6 @@ namespace MusicStudioCX
 				return DefWindowProc(hWnd, message, wParam, lParam);
 			}
 			break;
-		case WM_NCCREATE:
-			// allocate context
-			ctx = (TrackContext*)malloc(sizeof(TrackContext));
-			memset(ctx, 0, sizeof(TrackContext));
-			mctx = (MainWindowContext*)GetWindowLongPtr(GetParent(hWnd), GWLP_USERDATA);
-			// sixty seconds worth of samples
-			ctx->state = 0;
-			ctx->channelIndex = 0;
-			ctx->monobuffershort = (short*)malloc(SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
-			memset(ctx->monobuffershort, 0, SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
-
-			// fill it with a 440 hz sine wave
-			for (UINT32 sample = 0; sample < SAMPLES_PER_SEC * mctx->rec_time_seconds; sample++) {
-				//(((FRAME*)ctx->buffer) + f)->left = (short)(sinf((float)f / ((float)SAMPLES_PER_SEC / 440.0f) * 2.0f * 3.14159f) * 32767.0f);
-				//(((FRAME*)ctx->buffer) + f)->right = (((FRAME*)ctx->buffer) + f)->left; 
-				ctx->monobuffershort[sample] = (short)(sinf((float)sample / ((float)SAMPLES_PER_SEC / 440.0f) * 2.0f * 3.14159f) * 32767.0f);
-			}
-
-			SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)ctx);
-			return TRUE;
 		case WM_NCDESTROY:
 			// free context
 			ctx = get_track_context(hWnd);
@@ -139,13 +119,28 @@ namespace MusicStudioCX
 		RegisterClass(&wcctl);
 	}
 
-	HWND create_track_window(HWND parent, LPCWSTR TrackName)
+	TrackContext* allocate_context(MainWindowContext* mctx, HWND parent, short channel)
+	{
+		// allocate context
+		TrackContext* ctx = (TrackContext*)malloc(sizeof(TrackContext));
+		memset(ctx, 0, sizeof(TrackContext));
+		mctx = (MainWindowContext*)GetWindowLongPtr(parent, GWLP_USERDATA);
+		// sixty seconds worth of samples
+		ctx->state = 0;
+		ctx->channelIndex = channel;
+		ctx->monobuffershort = (short*)malloc(SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
+		memset(ctx->monobuffershort, 0, SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
+		return ctx;
+	}
+
+	TrackContext* create_track_window_a(HWND parent, LPCWSTR TrackName, short channel)
 	{
 		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(parent, GWLP_USERDATA);
 		RECT r = { 0 };
-
 		UINT32 idx = 0;
-		while (mctx->tracks[idx] != nullptr) idx++;
+
+		while (mctx->TrackContextList[idx] != nullptr) idx++;
+		mctx->TrackContextList[idx] = allocate_context(mctx, parent, channel);
 
 		GetWindowRect(parent, &r);
 		HWND hwnd = CreateWindow(L"CXTrackWindowClass", L"TrackName",
@@ -153,15 +148,25 @@ namespace MusicStudioCX
 			0, (idx * 128) + 32, r.right - r.left, 128,
 			parent, nullptr, GetModuleHandle(nullptr), nullptr);
 
+		mctx->TrackContextList[idx]->TrackWindow = hwnd;
+		SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)mctx->TrackContextList[idx]);
+
 		// create some controls here
 		CXCommon::CreateButton(hwnd, 0, 0, 48, 32, L"Rec", BTN_ARM_REC);
 		CXCommon::CreateButton(hwnd, 0, 32, 48, 32, L"Mute", BTN_MUTE_TRACK);
 
-		return hwnd;
+		return mctx->TrackContextList[idx];
 	}
 
 	TrackContext* get_track_context(HWND cwnd) {
 		return (TrackContext*)GetWindowLongPtr(cwnd, GWLP_USERDATA);
+	}
+
+	void generate_sine(float frequency, UINT32 seconds, short* buffer, float max_amplitude)
+	{
+		for (UINT32 sample = 0; sample < SAMPLES_PER_SEC * seconds; sample++) {
+			buffer[sample] = (short)(sinf((float)sample / ((float)SAMPLES_PER_SEC / frequency) * 2.0f * 3.14159f) * 32767.0f * max_amplitude);
+		}
 	}
 
 }

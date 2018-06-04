@@ -9,7 +9,7 @@ namespace MusicStudioCX
 		UINT32 frame_offset;
 		UINT32 max_frames;
 		UINT32 scroll_pos;
-		HWND tracks[16];
+		TrackContext* TrackContextList[16];
 	} MainWindowContext;
 
 	void initialize_main_window();

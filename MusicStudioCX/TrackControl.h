@@ -15,6 +15,7 @@ typedef struct {
 	short* monobuffershort;
 	short channelIndex;
 	UINT32 state;
+	HWND TrackWindow;
 } TrackContext;
 
 typedef struct {
@@ -27,7 +28,8 @@ namespace MusicStudioCX
 {
 
 	void initialize_track_window();
-	HWND create_track_window(HWND parent, LPCWSTR TrackName);
+	TrackContext* create_track_window_a(HWND parent, LPCWSTR TrackName, short channel);
 	TrackContext* get_track_context(HWND cwnd);
+	void generate_sine(float frequency, UINT32 seconds, short* buffer, float max_amplitude = 1.0f);
 
 }
