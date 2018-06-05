@@ -6,11 +6,19 @@
 #define BTN_ARM_REC 20000
 #define BTN_MUTE_TRACK 20001
 
-#define TRACK_IS_MUTE (UINT32)0x01
-#define TRACK_IS_ARMED (UINT32)0x02
-
 namespace MusicStudioCX
 {
+
+	const UINT32 TRACK_STATE_MUTE = 0x01;
+	const UINT32 TRACK_STATE_ARMED = 0x02;
+
+	BOOL TrackIsMute(UINT32 state) {
+		return (state & TRACK_STATE_MUTE ? TRUE : FALSE);
+	}
+
+	BOOL TrackIsArmed(UINT32 state) {
+		return (state & TRACK_STATE_ARMED ? TRUE : FALSE);
+	}
 
 	void DrawTrackWindow(HWND hWnd)
 	{
@@ -28,11 +36,11 @@ namespace MusicStudioCX
 		r1.right = WVFRM_OFFSET;
 		r1.top = 0;
 		r1.bottom = 32;
-		FillRect(hdc, &r1, ((ctx->state & TRACK_IS_ARMED) ? GreenBrush : RedBrush));
+		FillRect(hdc, &r1, ((ctx->state & TRACK_STATE_ARMED) ? GreenBrush : RedBrush));
 
 		r1.top += 32;
 		r1.bottom += 32;
-		FillRect(hdc, &r1, ((ctx->state & TRACK_IS_MUTE) ? GreenBrush : RedBrush));
+		FillRect(hdc, &r1, ((ctx->state & TRACK_STATE_MUTE) ? GreenBrush : RedBrush));
 
 		GetClientRect(hWnd, &r);
 		r.left += WVFRM_OFFSET;
@@ -72,13 +80,13 @@ namespace MusicStudioCX
 			ctx = get_track_context(hWnd);
 			switch (LOWORD(wParam)) {
 			case BTN_ARM_REC:
-				ctx->state ^= TRACK_IS_ARMED;
-				SetWindowText((HWND)lParam, ((ctx->state & TRACK_IS_ARMED) ? L"REC" : L"Rec"));
+				ctx->state ^= TRACK_STATE_ARMED;
+				SetWindowText((HWND)lParam, ((ctx->state & TRACK_STATE_ARMED) ? L"REC" : L"Rec"));
 				InvalidateRect(hWnd, nullptr, FALSE);
 				break;
 			case BTN_MUTE_TRACK:
-				ctx->state ^= TRACK_IS_MUTE;
-				SetWindowText((HWND)lParam, ((ctx->state & TRACK_IS_MUTE) ? L"MUTE" : L"Mute"));
+				ctx->state ^= TRACK_STATE_MUTE;
+				SetWindowText((HWND)lParam, ((ctx->state & TRACK_STATE_MUTE) ? L"MUTE" : L"Mute"));
 				InvalidateRect(hWnd, nullptr, FALSE);
 				break;
 			default:
@@ -127,7 +135,9 @@ namespace MusicStudioCX
 		mctx = (MainWindowContext*)GetWindowLongPtr(parent, GWLP_USERDATA);
 		// sixty seconds worth of samples
 		ctx->state = 0;
-		ctx->channelIndex = channel;
+		ctx->InputChannelIndex = channel;
+		ctx->leftpan = 1.0f;
+		ctx->rightpan = 1.0f;
 		ctx->monobuffershort = (short*)malloc(SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
 		memset(ctx->monobuffershort, 0, SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
 		return ctx;

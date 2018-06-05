@@ -10,6 +10,8 @@ namespace MusicStudioCX
 		UINT32 max_frames;
 		UINT32 scroll_pos;
 		TrackContext* TrackContextList[16];
+		LPRTA_DEVICE_INFO CaptureDevInfo = nullptr;
+		LPRTA_DEVICE_INFO RenderDevInfo = nullptr;
 	} MainWindowContext;
 
 	void initialize_main_window();

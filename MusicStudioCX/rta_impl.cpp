@@ -69,7 +69,8 @@ void rta_free(LPVOID pvoid) {
 
 UINT32 rta_list_supporting_devices_2(RTA_DEVICE_INFO** lppDeviceInfo,
 	WAVEFORMATEX *RequestedFormat,
-	DWORD StateMask, EDataFlow DataFlow, AUDCLNT_SHAREMODE ShareMode)
+	DWORD StateMask, EDataFlow DataFlow, AUDCLNT_SHAREMODE ShareMode,
+	BOOL TestForChannels)
 {
 
 	IMMDeviceEnumerator *pMMDeviceEnumerator = NULL;
@@ -105,16 +106,26 @@ UINT32 rta_list_supporting_devices_2(RTA_DEVICE_INFO** lppDeviceInfo,
 
 			if (SUCCEEDED(result)) {
 
-				WORD MaxChannels = 0;
-				for (WORD NumChannels = 1; NumChannels < 17; NumChannels++) {
-					RequestedFormat->nChannels = NumChannels;
-					if (SUCCEEDED(pAudioClient3->IsFormatSupported(ShareMode, RequestedFormat, nullptr))) {
-						MaxChannels = NumChannels;
-					}
-				}
-				RequestedFormat->nChannels = MaxChannels;
+				BOOL GotChannels = FALSE;
 
-				if (SUCCEEDED(result)) {
+				if (TRUE == TestForChannels) {
+					WORD MaxChannels = 0;
+					for (WORD NumChannels = 1; NumChannels < 17; NumChannels++) {
+						RequestedFormat->nChannels = NumChannels;
+						if (SUCCEEDED(pAudioClient3->IsFormatSupported(ShareMode, RequestedFormat, nullptr))) {
+							GotChannels = TRUE;
+							MaxChannels = NumChannels;
+						}
+					}
+					RequestedFormat->nChannels = MaxChannels;
+				}
+				else {
+					if (SUCCEEDED(pAudioClient3->IsFormatSupported(ShareMode, RequestedFormat, nullptr)))
+						GotChannels = TRUE;
+				}
+
+				if(TRUE == GotChannels) 
+				{
 
 					// get device id; do not free when done
 					LPWSTR lpwstrDeviceId = NULL;
@@ -147,6 +158,7 @@ UINT32 rta_list_supporting_devices_2(RTA_DEVICE_INFO** lppDeviceInfo,
 									LPRTA_DEVICE_INFO lpdi = (LPRTA_DEVICE_INFO)rta_alloc(sizeof(RTA_DEVICE_INFO));
 									lpdi->DeviceId = lpwstrDeviceId;
 									lpdi->DeviceName = _wcsdup(varName.pwszVal);
+									memcpy(&lpdi->WaveFormat, RequestedFormat, sizeof(WAVEFORMATEX));
 									//lpdi->ShareMode = ShareMode;
 									//lpdi->lpWaveFormatEx = lpWaveFormatEx;
 									lpdi->IsRawSupported = varIsRaw.boolVal;
@@ -212,7 +224,7 @@ void rta_free_device_list(LPRTA_DEVICE_INFO lpDeviceInfo)
 	}
 }
 
-BOOL rta_initialize_device_2(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags, WAVEFORMATEX* RequestedFormat) 
+BOOL rta_initialize_device_2(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags) 
 {
 
 	last_error = NULL;
@@ -260,14 +272,14 @@ BOOL rta_initialize_device_2(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags, 
 		printf("NOTE: RAW is not supported for this device.\n");
 	}
 
-	WAVEFORMATEX *FormatToUse = NULL;
-	if (RequestedFormat != nullptr) {
-		FormatToUse = RequestedFormat;
-	}
-	else {
-		result = pAudioClient3->GetMixFormat(&FormatToUse);
-		CHKERR(result, ERROR_28);
-	}
+	WAVEFORMATEX *FormatToUse = &lpDeviceInfo->WaveFormat;
+	//if (RequestedFormat != nullptr) {
+		//FormatToUse = RequestedFormat;
+	//}
+	//else {
+		//result = pAudioClient3->GetMixFormat(&FormatToUse);
+		//CHKERR(result, ERROR_28);
+	//}
 
 	printf("Native Samples Per Sec %i\n", FormatToUse->nSamplesPerSec);
 	printf("Native Sample Size %i\n", FormatToUse->wBitsPerSample);

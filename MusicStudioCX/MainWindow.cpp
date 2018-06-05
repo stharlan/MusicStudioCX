@@ -8,8 +8,6 @@ namespace MusicStudioCX
 	WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
 	LPRTA_DEVICE_INFO lpCaptureDevices = nullptr;
 	LPRTA_DEVICE_INFO lpRenderDevices = nullptr;
-	LPRTA_DEVICE_INFO CaptureDevInfo = nullptr;
-	LPRTA_DEVICE_INFO RenderDevInfo = nullptr;
 	HANDLE g_hCaptureThread = nullptr;
 	HANDLE g_hRenderThread = nullptr;
 	LPCWSTR STATUS_READY = L"Ready";
@@ -19,7 +17,17 @@ namespace MusicStudioCX
 	HWND ZoomInButton = nullptr;
 	HWND ZoomOutButton = nullptr;
 
-	WAVEFORMATEX STD_FORMAT = {
+	WAVEFORMATEX StandardFormatInDefault = {
+		WAVE_FORMAT_PCM,
+		NUM_CHANNELS,
+		SAMPLES_PER_SEC,
+		AVG_BYTES_PER_SEC,
+		BLOCK_ALIGN,
+		BITS_PER_SAMPLE,
+		0 // extra bytes
+	};
+
+	WAVEFORMATEX StandardFormatOutDefault = {
 		WAVE_FORMAT_PCM,
 		NUM_CHANNELS,
 		SAMPLES_PER_SEC,
@@ -59,10 +67,11 @@ namespace MusicStudioCX
 		if (frameCount < (mctx->max_frames - mctx->frame_offset)) {
 			for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
 				if (mctx->TrackContextList[TrackIndex] != nullptr) {
-					//TrackContext* ctx = MusicStudioCX::get_track_context(mctx->tracks[TrackIndex]);
-					for (UINT32 FrameIndex = 0; FrameIndex < frameCount; FrameIndex++) {
-						mctx->TrackContextList[TrackIndex]->monobuffershort[mctx->frame_offset + FrameIndex] = 
-							CapturedDataBuffer[FrameIndex].channel[mctx->TrackContextList[TrackIndex]->channelIndex];
+					if (MusicStudioCX::TrackIsArmed(mctx->TrackContextList[TrackIndex]->state)) {
+						for (UINT32 FrameIndex = 0; FrameIndex < frameCount; FrameIndex++) {
+							mctx->TrackContextList[TrackIndex]->monobuffershort[mctx->frame_offset + FrameIndex] =
+								CapturedDataBuffer[FrameIndex].channel[mctx->TrackContextList[TrackIndex]->InputChannelIndex];
+						}
 					}
 				}
 			}
@@ -75,11 +84,12 @@ namespace MusicStudioCX
 		else {
 			for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
 				if (mctx->TrackContextList[TrackIndex] != nullptr) {
-					//TrackContext* ctx = MusicStudioCX::get_track_context(mctx->tracks[TrackIndex]);
-					UINT32 nFrames = mctx->max_frames - mctx->frame_offset;
-					for (UINT32 FrameIndex = 0; FrameIndex < nFrames; FrameIndex++) {
-						mctx->TrackContextList[TrackIndex]->monobuffershort[mctx->frame_offset + FrameIndex] = 
-							CapturedDataBuffer[FrameIndex].channel[mctx->TrackContextList[TrackIndex]->channelIndex];
+					if (MusicStudioCX::TrackIsArmed(mctx->TrackContextList[TrackIndex]->state)) {
+						UINT32 nFrames = mctx->max_frames - mctx->frame_offset;
+						for (UINT32 FrameIndex = 0; FrameIndex < nFrames; FrameIndex++) {
+							mctx->TrackContextList[TrackIndex]->monobuffershort[mctx->frame_offset + FrameIndex] =
+								CapturedDataBuffer[FrameIndex].channel[mctx->TrackContextList[TrackIndex]->InputChannelIndex];
+						}
 					}
 				}
 			}
@@ -110,19 +120,19 @@ namespace MusicStudioCX
 	{
 		wchar_t msg[256];
 		memset(msg, 0, 256 * sizeof(wchar_t));
-		swprintf_s(msg, 256, L"%i sps %i bps %i ch %zi szflt",
-			STD_FORMAT.nSamplesPerSec,
-			STD_FORMAT.wBitsPerSample,
-			STD_FORMAT.nChannels,
-			sizeof(float));
 		SendMessage(hwndStatus, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
 		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);
 		mctx->frame_offset = 0;
-		if (TRUE == rta_initialize_device_2(CaptureDevInfo, AUDCLNT_STREAMFLAGS_EVENTCALLBACK, &STD_FORMAT))
+		if (TRUE == rta_initialize_device_2(mctx->CaptureDevInfo, AUDCLNT_STREAMFLAGS_EVENTCALLBACK))
 		{
+			swprintf_s(msg, 256, L"%i sps %i bps %i ch %zi szflt",
+				mctx->CaptureDevInfo->WaveFormat.nSamplesPerSec,
+				mctx->CaptureDevInfo->WaveFormat.wBitsPerSample,
+				mctx->CaptureDevInfo->WaveFormat.nChannels,
+				sizeof(float));
 			if (g_hCaptureThread) CloseHandle(g_hCaptureThread);
 			g_hCaptureThread = INVALID_HANDLE_VALUE;
-			g_hCaptureThread = CreateThread(nullptr, (SIZE_T)0, CaptureThread, (LPVOID)CaptureDevInfo, 0, nullptr);
+			g_hCaptureThread = CreateThread(nullptr, (SIZE_T)0, CaptureThread, (LPVOID)mctx->CaptureDevInfo, 0, nullptr);
 		}
 	}
 
@@ -136,18 +146,29 @@ namespace MusicStudioCX
 		wchar_t msg[256];
 		FRAME2CHSHORT *CapturedDataBuffer = (FRAME2CHSHORT*)buffer;
 		TrackContext* lpTrackCtx = nullptr;
+		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);	
+		// max number of output channels = 2
+		float fval[2];
 
-		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);
 		if (frameCount < (mctx->max_frames - mctx->frame_offset)) {
 			UINT32 nFrames = frameCount;
 			for (UINT32 FrameIndex = 0; FrameIndex < nFrames; FrameIndex++) {
+				memset(fval, 0, sizeof(float) * 2);
 				for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
 					lpTrackCtx = mctx->TrackContextList[TrackIndex];
 					if (lpTrackCtx != nullptr) {
-						CapturedDataBuffer[FrameIndex].channel[lpTrackCtx->channelIndex] +=
-							lpTrackCtx->monobuffershort[mctx->frame_offset + FrameIndex];
+						if (FALSE == MusicStudioCX::TrackIsMute(lpTrackCtx->state)) {
+							fval[0] += (float)lpTrackCtx->monobuffershort[mctx->frame_offset + FrameIndex] * lpTrackCtx->leftpan;
+							fval[1] += (float)lpTrackCtx->monobuffershort[mctx->frame_offset + FrameIndex] * lpTrackCtx->rightpan;
+						}
 					}
 				}
+				if (fval[0] > 32767.0f) fval[0] = 32767.0f;
+				if (fval[0] < -32767.0f) fval[0] = -32767.0f;
+				CapturedDataBuffer[FrameIndex].channel[0] = (short)fval[0];
+				if (fval[1] > 32767.0f) fval[1] = 32767.0f;
+				if (fval[1] < -32767.0f) fval[1] = -32767.0f;
+				CapturedDataBuffer[FrameIndex].channel[1] = (short)fval[1];
 			}
 
 			mctx->frame_offset += frameCount;
@@ -160,13 +181,22 @@ namespace MusicStudioCX
 		else {
 			UINT32 nFrames = mctx->max_frames - mctx->frame_offset;
 			for (UINT32 FrameIndex = 0; FrameIndex < nFrames; FrameIndex++) {
+				memset(fval, 0, sizeof(float) * 2);
 				for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
 					lpTrackCtx = mctx->TrackContextList[TrackIndex];
 					if (lpTrackCtx != nullptr) {
-						CapturedDataBuffer[FrameIndex].channel[lpTrackCtx->channelIndex] +=
-							lpTrackCtx->monobuffershort[mctx->frame_offset + FrameIndex];
+						if (FALSE == MusicStudioCX::TrackIsMute(lpTrackCtx->state)) {
+							fval[0] += (float)lpTrackCtx->monobuffershort[mctx->frame_offset + FrameIndex] * lpTrackCtx->leftpan;
+							fval[1] += (float)lpTrackCtx->monobuffershort[mctx->frame_offset + FrameIndex] * lpTrackCtx->rightpan;
+						}
 					}
 				}
+				if (fval[0] > 32767.0f) fval[0] = 32767.0f;
+				if (fval[0] < -32767.0f) fval[0] = -32767.0f;
+				CapturedDataBuffer[FrameIndex].channel[0] = (short)fval[0];
+				if (fval[1] > 32767.0f) fval[1] = 32767.0f;
+				if (fval[1] < -32767.0f) fval[1] = -32767.0f;
+				CapturedDataBuffer[FrameIndex].channel[1] = (short)fval[1];
 			}
 
 			mctx->frame_offset += nFrames;
@@ -189,19 +219,19 @@ namespace MusicStudioCX
 	{
 		wchar_t msg[256];
 		memset(msg, 0, 256 * sizeof(wchar_t));
+		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);
 		swprintf_s(msg, 256, L"%i sps %i bps %i ch %zi szflt",
-			STD_FORMAT.nSamplesPerSec,
-			STD_FORMAT.wBitsPerSample,
-			STD_FORMAT.nChannels,
+			mctx->RenderDevInfo->WaveFormat.nSamplesPerSec,
+			mctx->RenderDevInfo->WaveFormat.wBitsPerSample,
+			mctx->RenderDevInfo->WaveFormat.nChannels,
 			sizeof(float));
 		SendMessage(hwndStatus, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
-		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);
 		mctx->frame_offset = 0;
-		if (TRUE == rta_initialize_device_2(RenderDevInfo, AUDCLNT_STREAMFLAGS_EVENTCALLBACK, &STD_FORMAT))
+		if (TRUE == rta_initialize_device_2(mctx->RenderDevInfo, AUDCLNT_STREAMFLAGS_EVENTCALLBACK))
 		{
 			if (g_hRenderThread) CloseHandle(g_hRenderThread);
 			g_hRenderThread = INVALID_HANDLE_VALUE;
-			g_hRenderThread = CreateThread(nullptr, (SIZE_T)0, RenderThread, (LPVOID)RenderDevInfo, 0, nullptr);
+			g_hRenderThread = CreateThread(nullptr, (SIZE_T)0, RenderThread, (LPVOID)mctx->RenderDevInfo, 0, nullptr);
 		}
 	}
 
@@ -258,13 +288,16 @@ namespace MusicStudioCX
 		case WM_COMMAND:
 			if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
 			{
+				MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);
+
 				cwnd = GetDlgItem(hDlg, IDC_CMBINPUTIFX);
 				lr = SendMessage(cwnd, CB_GETCURSEL, 0, 0);
-				CaptureDevInfo = (LPRTA_DEVICE_INFO)SendMessage(cwnd, CB_GETITEMDATA, lr, 0);
+				// capture dev info changed
+				mctx->CaptureDevInfo = (LPRTA_DEVICE_INFO)SendMessage(cwnd, CB_GETITEMDATA, lr, 0);
 
 				cwnd = GetDlgItem(hDlg, IDC_CMBOUTPUTIFX);
 				lr = SendMessage(cwnd, CB_GETCURSEL, 0, 0);
-				RenderDevInfo = (LPRTA_DEVICE_INFO)SendMessage(cwnd, CB_GETITEMDATA, lr, 0);
+				mctx->RenderDevInfo = (LPRTA_DEVICE_INFO)SendMessage(cwnd, CB_GETITEMDATA, lr, 0);
 
 				EndDialog(hDlg, LOWORD(wParam));
 
@@ -482,16 +515,19 @@ namespace MusicStudioCX
 		si.fMask = SIF_RANGE | SIF_POS;
 		SetScrollInfo(hwndMainWindow, SB_HORZ, &si, TRUE);
 
-		rta_list_supporting_devices_2(&lpCaptureDevices, &STD_FORMAT);
-		CaptureDevInfo = lpCaptureDevices;
-		rta_list_supporting_devices_2(&lpRenderDevices, &STD_FORMAT, DEVICE_STATE_ACTIVE, eRender);
-		RenderDevInfo = lpRenderDevices;
+		rta_list_supporting_devices_2(&lpCaptureDevices, &StandardFormatInDefault, DEVICE_STATE_ACTIVE, 
+			eCapture, AUDCLNT_SHAREMODE_EXCLUSIVE, TRUE);
+		mctx->CaptureDevInfo = lpCaptureDevices;
+
+		rta_list_supporting_devices_2(&lpRenderDevices, &StandardFormatOutDefault, DEVICE_STATE_ACTIVE, 
+			eRender, AUDCLNT_SHAREMODE_EXCLUSIVE, FALSE);
+		mctx->RenderDevInfo = lpRenderDevices;
 
 		TrackContext* ctx = MusicStudioCX::create_track_window_a(hwndMainWindow, L"Track1", 0);
-		generate_sine(261.626, mctx->rec_time_seconds, ctx->monobuffershort, 0.5f);
+		generate_sine(261.626f, mctx->rec_time_seconds, ctx->monobuffershort, 0.5f);
 
 		ctx = MusicStudioCX::create_track_window_a(hwndMainWindow, L"Track2", 1);
-		generate_sine(329.628, mctx->rec_time_seconds, ctx->monobuffershort, 0.5f);
+		generate_sine(329.628f, mctx->rec_time_seconds, ctx->monobuffershort, 0.5f);
 
 		return hwndMainWindow;
 	}
