@@ -3,7 +3,7 @@
 typedef struct {
 	LPWSTR DeviceName;
 	LPWSTR DeviceId;
-	BYTE* FrameBuffer;
+	BYTE* FrameBufferByte;
 	IMMDevice *pMMDevice;
 	IAudioClient *pAudioClient;
 	LPVOID pNext;

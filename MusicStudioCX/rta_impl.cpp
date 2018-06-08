@@ -216,7 +216,7 @@ void rta_free_device_list(LPRTA_DEVICE_INFO lpDeviceInfo)
 		pNext = (LPRTA_DEVICE_INFO)(pThis->pNext);
 		if (pThis->DeviceName != NULL) free(pThis->DeviceName);
 		if (pThis->DeviceId != NULL) CoTaskMemFree(pThis->DeviceId);
-		if (pThis->FrameBuffer != NULL) rta_free(pThis->FrameBuffer);
+		if (pThis->FrameBufferByte != NULL) rta_free(pThis->FrameBufferByte);
 		if (pThis->pAudioClient != NULL) pThis->pAudioClient->Release();
 		if (pThis->pMMDevice != NULL) pThis->pMMDevice->Release();
 		rta_free(pThis);
@@ -345,9 +345,9 @@ BOOL rta_initialize_device_2(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags)
 		lpDeviceInfo->BufferSizeFrames = PeriodToUse;
 		lpDeviceInfo->SizeOfFrame = FormatToUse->nChannels *
 			(FormatToUse->wBitsPerSample / 8);
-		//lpDeviceInfo->wChannels = FormatToUse->nChannels;
 
-		lpDeviceInfo->FrameBuffer = (BYTE*)rta_alloc(
+		// size of frame buffer
+		lpDeviceInfo->FrameBufferByte = (BYTE*)rta_alloc(
 			lpDeviceInfo->BufferSizeFrames * lpDeviceInfo->SizeOfFrame);
 
 		UINT32 RealBufferSizeFrames = 0;

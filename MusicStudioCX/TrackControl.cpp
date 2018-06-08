@@ -5,9 +5,12 @@
 
 #define BTN_ARM_REC 20000
 #define BTN_MUTE_TRACK 20001
+#define BTN_TRACK_PROP 20002
 
 namespace MusicStudioCX
 {
+
+	INT_PTR CALLBACK TrackPropsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
 	const UINT32 TRACK_STATE_MUTE = 0x01;
 	const UINT32 TRACK_STATE_ARMED = 0x02;
@@ -89,6 +92,9 @@ namespace MusicStudioCX
 				SetWindowText((HWND)lParam, ((ctx->state & TRACK_STATE_MUTE) ? L"MUTE" : L"Mute"));
 				InvalidateRect(hWnd, nullptr, FALSE);
 				break;
+			case BTN_TRACK_PROP:
+				DialogBoxParam(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDD_TRACKPROPS), hWnd, TrackPropsDialogProc, (LPARAM)ctx);
+				break;
 			default:
 				return DefWindowProc(hWnd, message, wParam, lParam);
 			}
@@ -138,6 +144,7 @@ namespace MusicStudioCX
 		ctx->InputChannelIndex = channel;
 		ctx->leftpan = 1.0f;
 		ctx->rightpan = 1.0f;
+		ctx->volume = 1.0f;
 		ctx->monobuffershort = (short*)malloc(SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
 		memset(ctx->monobuffershort, 0, SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
 		return ctx;
@@ -164,6 +171,7 @@ namespace MusicStudioCX
 		// create some controls here
 		CXCommon::CreateButton(hwnd, 0, 0, 48, 32, L"Rec", BTN_ARM_REC);
 		CXCommon::CreateButton(hwnd, 0, 32, 48, 32, L"Mute", BTN_MUTE_TRACK);
+		CXCommon::CreateButton(hwnd, 0, 64, 48, 32, L"Prop", BTN_TRACK_PROP);
 
 		return mctx->TrackContextList[idx];
 	}
@@ -177,6 +185,69 @@ namespace MusicStudioCX
 		for (UINT32 sample = 0; sample < SAMPLES_PER_SEC * seconds; sample++) {
 			buffer[sample] = (short)(sinf((float)sample / ((float)SAMPLES_PER_SEC / frequency) * 2.0f * 3.14159f) * 32767.0f * max_amplitude);
 		}
+	}
+
+	INT_PTR CALLBACK TrackPropsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
+	{
+		UNREFERENCED_PARAMETER(lParam);
+		TrackContext* ctx = nullptr;
+		LPARAM SliderPos = 100;
+
+		switch (message)
+		{
+		case WM_INITDIALOG:
+			ctx = (TrackContext*)lParam;
+			SetWindowLongPtr(hDlg, DWLP_USER, (LONG_PTR)ctx);
+			// pan value
+			// left full is l=1, r=0
+			// center is l=1, r=1
+			// right full is l=0, r=1
+			// Slider should go from 0 to 200
+			if (ctx->leftpan < 1.0f) {
+				// pan right
+				// 100 to 200
+				SliderPos = (LPARAM)((1.0f - ctx->leftpan) * 100.0f) + 100;
+			}
+			else {
+				// pan left 0 to 100
+				SliderPos = (LPARAM)(ctx->rightpan * 100.0f);
+			}
+			SendMessage(GetDlgItem(hDlg, IDC_PANSLIDER), TBM_SETRANGE, FALSE, MAKELONG(0, 200));
+			SendMessage(GetDlgItem(hDlg, IDC_PANSLIDER), TBM_SETTICFREQ, 20, 0);
+			SendMessage(GetDlgItem(hDlg, IDC_PANSLIDER), TBM_SETPOS, TRUE, SliderPos);
+
+			SliderPos = (LPARAM)((1.0f - ctx->volume) * 100.0f);
+			SendMessage(GetDlgItem(hDlg, IDC_VOLSLIDER), TBM_SETRANGE, FALSE, MAKELONG(0, 100));
+			SendMessage(GetDlgItem(hDlg, IDC_VOLSLIDER), TBM_SETTICFREQ, 10, 0);
+			SendMessage(GetDlgItem(hDlg, IDC_VOLSLIDER), TBM_SETPOS, TRUE, SliderPos);
+			return (INT_PTR)TRUE;
+		case WM_COMMAND:
+			if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
+			{
+				if (LOWORD(wParam) == IDOK) {
+					ctx = (TrackContext*)GetWindowLongPtr(hDlg, DWLP_USER);
+					SliderPos = SendMessage(GetDlgItem(hDlg, IDC_PANSLIDER), TBM_GETPOS, 0, 0);
+					if (SliderPos == 100) {
+						ctx->leftpan = 1.0f;
+						ctx->rightpan = 1.0f;
+					}
+					else if (SliderPos < 100) {
+						ctx->rightpan = (float)SliderPos / 100.0f;
+						ctx->leftpan = 1.0f;
+					}
+					else {
+						ctx->rightpan = 1.0f;
+						ctx->leftpan = 1.0f - ((float)(SliderPos - 100) / 100.0f);
+					}
+					SliderPos = SendMessage(GetDlgItem(hDlg, IDC_VOLSLIDER), TBM_GETPOS, 0, 0);
+					ctx->volume = 1.0f - ((float)SliderPos / 100.0f);
+				}
+				EndDialog(hDlg, LOWORD(wParam));
+				return (INT_PTR)TRUE;
+			}
+			break;
+		}
+		return (INT_PTR)FALSE;
 	}
 
 }

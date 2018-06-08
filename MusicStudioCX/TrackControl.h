@@ -16,6 +16,7 @@ typedef struct {
 	short InputChannelIndex;
 	float leftpan;
 	float rightpan;
+	float volume;
 	UINT32 state;
 	HWND TrackWindow;
 } TrackContext;

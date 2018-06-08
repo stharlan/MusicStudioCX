@@ -113,14 +113,14 @@ STDMETHODIMP RtaRenderAudioHandler::Invoke(IRtwqAsyncResult* pAsyncResult)
 
 	if (this->FrameCount <= avail) {
 
-		memset(this->lpRenderDeviceInfo->FrameBuffer, 0, this->FrameCount * this->lpRenderDeviceInfo->SizeOfFrame);
-		pHandler(this->lpRenderDeviceInfo->FrameBuffer, this->FrameCount, &handlerResult);
+		memset(this->lpRenderDeviceInfo->FrameBufferByte, 0, this->FrameCount * this->lpRenderDeviceInfo->SizeOfFrame);
+		pHandler(this->lpRenderDeviceInfo->FrameBufferByte, this->FrameCount, &handlerResult);
 
 		// get buffer from the render client
 		ThrowIfFailed(pAudioRenderClient->GetBuffer(this->FrameCount, &this->pRenBuffer));
 
 		// copy capture device buffer into render buffer
-		memcpy(this->pRenBuffer, this->lpRenderDeviceInfo->FrameBuffer,
+		memcpy(this->pRenBuffer, this->lpRenderDeviceInfo->FrameBufferByte,
 			this->FrameCount * this->lpRenderDeviceInfo->SizeOfFrame);
 
 		// release the render buffer

@@ -16,6 +16,7 @@ namespace MusicStudioCX
 	HWND hwndStatus = nullptr;
 	HWND ZoomInButton = nullptr;
 	HWND ZoomOutButton = nullptr;
+	HWND AddTrackButton = nullptr;
 
 	WAVEFORMATEX StandardFormatInDefault = {
 		WAVE_FORMAT_PCM,
@@ -158,8 +159,8 @@ namespace MusicStudioCX
 					lpTrackCtx = mctx->TrackContextList[TrackIndex];
 					if (lpTrackCtx != nullptr) {
 						if (FALSE == MusicStudioCX::TrackIsMute(lpTrackCtx->state)) {
-							fval[0] += (float)lpTrackCtx->monobuffershort[mctx->frame_offset + FrameIndex] * lpTrackCtx->leftpan;
-							fval[1] += (float)lpTrackCtx->monobuffershort[mctx->frame_offset + FrameIndex] * lpTrackCtx->rightpan;
+							fval[0] += (float)lpTrackCtx->monobuffershort[mctx->frame_offset + FrameIndex] * lpTrackCtx->volume * lpTrackCtx->leftpan;
+							fval[1] += (float)lpTrackCtx->monobuffershort[mctx->frame_offset + FrameIndex] * lpTrackCtx->volume * lpTrackCtx->rightpan;
 						}
 					}
 				}
@@ -186,8 +187,8 @@ namespace MusicStudioCX
 					lpTrackCtx = mctx->TrackContextList[TrackIndex];
 					if (lpTrackCtx != nullptr) {
 						if (FALSE == MusicStudioCX::TrackIsMute(lpTrackCtx->state)) {
-							fval[0] += (float)lpTrackCtx->monobuffershort[mctx->frame_offset + FrameIndex] * lpTrackCtx->leftpan;
-							fval[1] += (float)lpTrackCtx->monobuffershort[mctx->frame_offset + FrameIndex] * lpTrackCtx->rightpan;
+							fval[0] += (float)lpTrackCtx->monobuffershort[mctx->frame_offset + FrameIndex] * lpTrackCtx->volume * lpTrackCtx->leftpan;
+							fval[1] += (float)lpTrackCtx->monobuffershort[mctx->frame_offset + FrameIndex] * lpTrackCtx->volume * lpTrackCtx->rightpan;
 						}
 					}
 				}
@@ -379,6 +380,9 @@ namespace MusicStudioCX
 					}
 				}
 			}
+			else if (hwndCommand == AddTrackButton) {
+				MusicStudioCX::create_track_window_a(hWnd, L"New Track", 0);
+			}
 			else {
 				int wmId = LOWORD(wParam);
 				// Parse the menu selections:
@@ -504,6 +508,8 @@ namespace MusicStudioCX
 
 		ZoomInButton = CXCommon::CreateButton(hwndMainWindow, 0, 0, 64, 32, L"ZIN", 1);
 		ZoomOutButton = CXCommon::CreateButton(hwndMainWindow, 64, 0, 64, 32, L"ZOUT", 2);
+		AddTrackButton = CXCommon::CreateButton(hwndMainWindow, 128, 0, 64, 32, L"NWTR", 3);
+
 
 		// set scroll bar info
 		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);
