@@ -18,7 +18,12 @@ typedef struct {
 	float rightpan;
 	float volume;
 	UINT32 state;
+	HWND PrevTrackWindow;
 	HWND TrackWindow;
+	HWND NextTrackWindow;
+	BOOL IsMinimized;
+	UINT32 TrackIndex;
+	HWND buttons[3];
 } TrackContext;
 
 typedef struct {

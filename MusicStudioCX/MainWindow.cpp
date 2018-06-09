@@ -17,6 +17,9 @@ namespace MusicStudioCX
 	HWND ZoomInButton = nullptr;
 	HWND ZoomOutButton = nullptr;
 	HWND AddTrackButton = nullptr;
+	HWND RecButton = nullptr;
+	HWND PlayButton = nullptr;
+	HWND StopButton = nullptr;
 
 	WAVEFORMATEX StandardFormatInDefault = {
 		WAVE_FORMAT_PCM,
@@ -108,7 +111,7 @@ namespace MusicStudioCX
 		LPRTA_DEVICE_INFO devInfo = (LPRTA_DEVICE_INFO)lpThreadParameter;
 		rta_capture_frames_rtwq(devInfo, nullptr, CaptureDataHandler);
 
-		for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
+		for (UINT32 TrackIndex = mctx->vscroll_pos; TrackIndex < 16; TrackIndex++) {
 			if (mctx->TrackContextList[TrackIndex] != nullptr) {
 				InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
 			}
@@ -329,6 +332,23 @@ namespace MusicStudioCX
 		return (INT_PTR)FALSE;
 	}
 
+	void DrawTimeBar(HWND hwnd, HDC hdc)
+	{
+		RECT cr;
+		GetClientRect(hwnd, &cr);
+		RECT r = { 0 };
+		r.left = WVFRM_OFFSET;
+		r.top = 32;
+		r.right = cr.right;
+		r.bottom = 64;
+		FillRect(hdc, &r, (HBRUSH)GetStockObject(BLACK_BRUSH));
+		COLORREF oldTextColor = SetTextColor(hdc, RGB(255, 255, 255));
+		COLORREF oldBackColor = SetBkColor(hdc, RGB(0, 0, 0));
+		TextOut(hdc, WVFRM_OFFSET, 32, L"TIME BAR", 8);
+		SetTextColor(hdc, oldTextColor);
+		SetBkColor(hdc, oldBackColor);
+	}
+
 	//
 	//  FUNCTION: WndProc(HWND, UINT, WPARAM, LPARAM)
 	//
@@ -341,47 +361,52 @@ namespace MusicStudioCX
 	//
 	LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
-		MainWindowContext* ctx = nullptr;
+		MainWindowContext* mctx = nullptr;
 		HWND hwndCommand = nullptr;
+		int pos = 0;
 
 		switch (message)
 		{
 		case WM_NCCREATE:
-			ctx = (MainWindowContext*)malloc(sizeof(MainWindowContext));
-			memset(ctx, 0, sizeof(MainWindowContext));
-			ctx->rec_time_seconds = 3;
-			ctx->max_frames = SAMPLES_PER_SEC * ctx->rec_time_seconds;
-			ctx->zoom_mult = 1;
-			SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)ctx);
+			mctx = (MainWindowContext*)malloc(sizeof(MainWindowContext));
+			memset(mctx, 0, sizeof(MainWindowContext));
+			mctx->rec_time_seconds = 5 * 60; // five minutes
+			mctx->max_frames = SAMPLES_PER_SEC * mctx->rec_time_seconds;
+			mctx->zoom_mult = 1;
+			SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)mctx);
 			return TRUE;
 		case WM_NCDESTROY:
-			ctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
-			if (ctx) free(ctx);
+			mctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+			if (mctx) free(mctx);
 			break;
 		case WM_COMMAND:
 		{
-			ctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+			mctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
 			hwndCommand = (HWND)lParam;
 			if (hwndCommand == ZoomInButton) {
-				ctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
-				if (ctx->zoom_mult > 1) ctx->zoom_mult /= 2;
-				for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
-					if (ctx->TrackContextList[TrackIndex] != nullptr) {
-						InvalidateRect(ctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
+				if (mctx->zoom_mult > 1) mctx->zoom_mult /= 2;
+				for (UINT32 TrackIndex = mctx->vscroll_pos; TrackIndex < 16; TrackIndex++) {
+					if (mctx->TrackContextList[TrackIndex] != nullptr) {
+						InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
 					}
 				}
 			}
 			else if (hwndCommand == ZoomOutButton) {
-				ctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
-				ctx->zoom_mult *= 2;
-				for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
-					if (ctx->TrackContextList[TrackIndex] != nullptr) {
-						InvalidateRect(ctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
+				mctx->zoom_mult *= 2;
+				for (UINT32 TrackIndex = mctx->vscroll_pos; TrackIndex < 16; TrackIndex++) {
+					if (mctx->TrackContextList[TrackIndex] != nullptr) {
+						InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
 					}
 				}
 			}
 			else if (hwndCommand == AddTrackButton) {
 				MusicStudioCX::create_track_window_a(hWnd, L"New Track", 0);
+			}
+			else if (hwndCommand == PlayButton) {
+				StartPlayback();
+			}
+			else if (hwndCommand == RecButton) {
+				StartRecording();
 			}
 			else {
 				int wmId = LOWORD(wParam);
@@ -397,15 +422,6 @@ namespace MusicStudioCX
 				case ID_FILE_SETUP:
 					DialogBox(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDD_SETUPDLG), hWnd, SetupDlgProc);
 					break;
-				case ID_TEST_START:
-					StartRecording();
-					break;
-				case ID_TEST_STOP:
-					//StopRecording();
-					break;
-				case ID_TEST_STARTPLAY:
-					StartPlayback();
-					break;
 				default:
 					return DefWindowProc(hWnd, message, wParam, lParam);
 				}
@@ -417,6 +433,7 @@ namespace MusicStudioCX
 			PAINTSTRUCT ps;
 			HDC hdc = BeginPaint(hWnd, &ps);
 			// TODO: Add any drawing code that uses hdc here...
+			DrawTimeBar(hWnd, hdc);
 			EndPaint(hWnd, &ps);
 		}
 		break;
@@ -424,12 +441,12 @@ namespace MusicStudioCX
 			// TODO
 			// if this is running, need to gracefully
 			// stop the thread, wait, and close
-			ctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+			mctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
 			if (g_hCaptureThread) CloseHandle(g_hCaptureThread);
 			if (g_hRenderThread) CloseHandle(g_hRenderThread);
 			for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
-				if (ctx->TrackContextList[TrackIndex] != nullptr) {
-					DestroyWindow(ctx->TrackContextList[TrackIndex]->TrackWindow);
+				if (mctx->TrackContextList[TrackIndex] != nullptr) {
+					DestroyWindow(mctx->TrackContextList[TrackIndex]->TrackWindow);
 				}
 			}
 			if (lpCaptureDevices) rta_free_device_list(lpCaptureDevices);
@@ -438,26 +455,68 @@ namespace MusicStudioCX
 			lpRenderDevices = nullptr;
 			PostQuitMessage(0);
 			break;
+		case WM_VSCROLL:
+			mctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+			switch (LOWORD(wParam))
+			{
+			case SB_LINEUP:
+			case SB_PAGEUP:
+				pos = GetScrollPos(hWnd, SB_VERT);
+				if (pos > 0) {
+					pos--;
+					SetScrollPos(hWnd, SB_VERT, pos, TRUE);
+					mctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+					mctx->vscroll_pos = pos;
+					reposition_all_tracks(mctx);
+				}
+				break;
+			case SB_LINEDOWN:
+			case SB_PAGEDOWN:
+				pos = GetScrollPos(hWnd, SB_VERT);
+				if (pos < 15) {
+					pos++;
+					SetScrollPos(hWnd, SB_VERT, pos, TRUE);
+					mctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+					mctx->vscroll_pos = pos;
+					reposition_all_tracks(mctx);
+				}
+				break;
+			case SB_THUMBTRACK:
+				mctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+				if (mctx->vscroll_pos != HIWORD(wParam))
+				{
+					mctx->vscroll_pos = HIWORD(wParam);
+					reposition_all_tracks(mctx);
+				}
+				break;
+			case SB_THUMBPOSITION:
+				SetScrollPos(hWnd, SB_VERT, HIWORD(wParam), TRUE);
+				mctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+				mctx->vscroll_pos = HIWORD(wParam);
+				reposition_all_tracks(mctx);
+				break;
+			}
+			break;
 		case WM_HSCROLL:
-			ctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+			mctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
 			switch (LOWORD(wParam))
 			{
 			case SB_THUMBTRACK:
-				ctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
-				ctx->scroll_pos = HIWORD(wParam);
-				for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
-					if (ctx->TrackContextList[TrackIndex] != nullptr) {
-						InvalidateRect(ctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
+				mctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+				mctx->hscroll_pos = HIWORD(wParam);
+				for (UINT32 TrackIndex = mctx->vscroll_pos; TrackIndex < 16; TrackIndex++) {
+					if (mctx->TrackContextList[TrackIndex] != nullptr) {
+						InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
 					}
 				}
 				break;
 			case SB_THUMBPOSITION:
 				SetScrollPos(hWnd, SB_HORZ, HIWORD(wParam), TRUE);
-				ctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
-				ctx->scroll_pos = HIWORD(wParam);
-				for (UINT32 TrackIndex = 0; TrackIndex < 16; TrackIndex++) {
-					if (ctx->TrackContextList[TrackIndex] != nullptr) {
-						InvalidateRect(ctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
+				mctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+				mctx->hscroll_pos = HIWORD(wParam);
+				for (UINT32 TrackIndex = mctx->vscroll_pos; TrackIndex < 16; TrackIndex++) {
+					if (mctx->TrackContextList[TrackIndex] != nullptr) {
+						InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
 					}
 				}
 				break;
@@ -465,9 +524,10 @@ namespace MusicStudioCX
 			break;
 		case WM_SIZE:
 			SendMessage(hwndStatus, WM_SIZE, wParam, lParam);
-			ctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+			mctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
 			for (int i = 0; i < 16; i++) {
-				if (ctx->TrackContextList[i] != nullptr) SendMessage(ctx->TrackContextList[i]->TrackWindow, WM_SIZE, wParam, lParam);
+				if (mctx->TrackContextList[i] != nullptr) 
+					SendMessage(mctx->TrackContextList[i]->TrackWindow, WM_SIZE, wParam, lParam);
 			}
 			break;
 		default:
@@ -509,7 +569,9 @@ namespace MusicStudioCX
 		ZoomInButton = CXCommon::CreateButton(hwndMainWindow, 0, 0, 64, 32, L"ZIN", 1);
 		ZoomOutButton = CXCommon::CreateButton(hwndMainWindow, 64, 0, 64, 32, L"ZOUT", 2);
 		AddTrackButton = CXCommon::CreateButton(hwndMainWindow, 128, 0, 64, 32, L"NWTR", 3);
-
+		PlayButton = CXCommon::CreateButton(hwndMainWindow, 192, 0, 64, 32, L"PLAY", 3);
+		RecButton = CXCommon::CreateButton(hwndMainWindow, 256, 0, 64, 32, L"RECD", 3);
+		StopButton = CXCommon::CreateButton(hwndMainWindow, 320, 0, 64, 32, L"STOP", 3);
 
 		// set scroll bar info
 		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);
@@ -521,6 +583,11 @@ namespace MusicStudioCX
 		si.fMask = SIF_RANGE | SIF_POS;
 		SetScrollInfo(hwndMainWindow, SB_HORZ, &si, TRUE);
 
+		si.nMax = 15;
+		si.nPage = 1;
+		si.fMask |= SIF_PAGE;
+		SetScrollInfo(hwndMainWindow, SB_VERT, &si, TRUE);
+
 		rta_list_supporting_devices_2(&lpCaptureDevices, &StandardFormatInDefault, DEVICE_STATE_ACTIVE, 
 			eCapture, AUDCLNT_SHAREMODE_EXCLUSIVE, TRUE);
 		mctx->CaptureDevInfo = lpCaptureDevices;
@@ -529,13 +596,65 @@ namespace MusicStudioCX
 			eRender, AUDCLNT_SHAREMODE_EXCLUSIVE, FALSE);
 		mctx->RenderDevInfo = lpRenderDevices;
 
-		TrackContext* ctx = MusicStudioCX::create_track_window_a(hwndMainWindow, L"Track1", 0);
-		generate_sine(261.626f, mctx->rec_time_seconds, ctx->monobuffershort, 0.5f);
+		wchar_t TrackName[] = L"Track##";
+		wchar_t digit = '0';
+		TrackContext* prevContext = nullptr;
+		for (int i = 0; i < 16; i++) {
+			if (i < 9) {
+				TrackName[5] = '0';
+				TrackName[6] = digit + i + 1;
+			}
+			else {
+				TrackName[5] = '1';
+				TrackName[6] = digit + (i - 9);
+			}
+			TrackContext* ctx = MusicStudioCX::create_track_window_a(hwndMainWindow, TrackName, 0);
+			ctx->TrackIndex = i;
+			if (prevContext != nullptr) {
+				prevContext->NextTrackWindow = ctx->TrackWindow;
+				ctx->PrevTrackWindow = prevContext->TrackWindow;
+			}
+			prevContext = ctx;
+		}
 
-		ctx = MusicStudioCX::create_track_window_a(hwndMainWindow, L"Track2", 1);
-		generate_sine(329.628f, mctx->rec_time_seconds, ctx->monobuffershort, 0.5f);
+		//TrackContext* ctx = MusicStudioCX::create_track_window_a(hwndMainWindow, L"Track1", 0);
+		//generate_sine(261.626f, mctx->rec_time_seconds, ctx->monobuffershort, 0.5f);
+
+		//ctx = MusicStudioCX::create_track_window_a(hwndMainWindow, L"Track2", 1);
+		//generate_sine(329.628f, mctx->rec_time_seconds, ctx->monobuffershort, 0.5f);
 
 		return hwndMainWindow;
+	}
+
+	void reposition_all_tracks(MainWindowContext* mctx)
+	{
+		UINT32 offset = 0;
+		RECT r;
+		for (int i = 0; i < 16; i++) {
+			TrackContext* ctx = mctx->TrackContextList[i];
+			if (ctx->TrackIndex < mctx->vscroll_pos) {
+				if(TRUE == IsWindowVisible(ctx->TrackWindow)) ShowWindow(ctx->TrackWindow, SW_HIDE);
+			}
+			else {
+				if (FALSE == IsWindowVisible(ctx->TrackWindow)) ShowWindow(ctx->TrackWindow, SW_SHOW);
+				GetClientRect(ctx->TrackWindow, &r);
+				int cmdShow = SW_HIDE;
+				if (TRUE == ctx->IsMinimized) {
+					cmdShow = SW_HIDE;
+					SetWindowPos(ctx->TrackWindow, nullptr, 0, offset + MAIN_WINDOW_HEADER_HEIGHT, r.right - r.left, 32, SWP_NOZORDER);
+					offset += 32;
+				}
+				else {
+					cmdShow = SW_SHOW;
+					SetWindowPos(ctx->TrackWindow, nullptr, 0, offset + MAIN_WINDOW_HEADER_HEIGHT, r.right - r.left, 128, SWP_NOZORDER);
+					offset += 128;
+				}
+				ShowWindow(ctx->buttons[0], cmdShow);
+				ShowWindow(ctx->buttons[1], cmdShow);
+				ShowWindow(ctx->buttons[2], cmdShow);
+				InvalidateRect(ctx->TrackWindow, nullptr, FALSE);
+			}
+		}
 	}
 
 }

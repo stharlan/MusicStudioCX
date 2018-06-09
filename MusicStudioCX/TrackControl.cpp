@@ -1,8 +1,6 @@
 
 #include "stdafx.h"
 
-#define WVFRM_OFFSET 56
-
 #define BTN_ARM_REC 20000
 #define BTN_MUTE_TRACK 20001
 #define BTN_TRACK_PROP 20002
@@ -31,44 +29,78 @@ namespace MusicStudioCX
 		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(GetParent(hWnd), GWLP_USERDATA);
 		RECT r, r1;
 		HGDIOBJ OldPen = nullptr;
+		wchar_t WindowName[16];
 
-		HBRUSH GreenBrush = CreateSolidBrush(RGB(0, 255, 0));
-		HBRUSH RedBrush = CreateSolidBrush(RGB(255, 0, 0));
+		if (FALSE == ctx->IsMinimized) {
+			HBRUSH GreenBrush = CreateSolidBrush(RGB(0, 255, 0));
+			HBRUSH RedBrush = CreateSolidBrush(RGB(255, 0, 0));
 
-		r1.left = WVFRM_OFFSET - 8;
-		r1.right = WVFRM_OFFSET;
-		r1.top = 0;
-		r1.bottom = 32;
-		FillRect(hdc, &r1, ((ctx->state & TRACK_STATE_ARMED) ? GreenBrush : RedBrush));
+			r1.left = WVFRM_OFFSET - 8;
+			r1.right = WVFRM_OFFSET;
+			r1.top = 32;
+			r1.bottom = 64;
+			FillRect(hdc, &r1, ((ctx->state & TRACK_STATE_ARMED) ? GreenBrush : RedBrush));
 
-		r1.top += 32;
-		r1.bottom += 32;
-		FillRect(hdc, &r1, ((ctx->state & TRACK_STATE_MUTE) ? GreenBrush : RedBrush));
+			r1.top += 32;
+			r1.bottom += 32;
+			FillRect(hdc, &r1, ((ctx->state & TRACK_STATE_MUTE) ? GreenBrush : RedBrush));
+
+			DeleteObject(GreenBrush);
+			DeleteObject(RedBrush);
+		}
 
 		GetClientRect(hWnd, &r);
 		r.left += WVFRM_OFFSET;
 
-		FillRect(hdc, &r, (HBRUSH)GetStockObject(BLACK_BRUSH));
-		HPEN GreenPen = CreatePen(PS_SOLID, 1, RGB(0, 255, 0));
-		OldPen = SelectObject(hdc, GreenPen);
+		HBRUSH grayBrush = CreateSolidBrush(RGB(0x33, 0x33, 0x33));
+		HPEN grayPen = CreatePen(PS_SOLID, 1, RGB(0x66, 0x66, 0x66));
+		HBRUSH grayHatch = CreateHatchBrush(HS_DIAGCROSS, RGB(0x66, 0x66, 0x66));
+		HGDIOBJ oldPen1 = SelectObject(hdc, grayPen);
+		if (TRUE == ctx->IsMinimized) {
+			r.bottom = 32;
+			COLORREF oldColor = SetBkColor(hdc, RGB(0x33, 0x33, 0x33));
+			FillRect(hdc, &r, grayHatch);
+			SetBkColor(hdc, oldColor);
+		}
+		else {
+			FillRect(hdc, &r, grayBrush);
+		}
+		MoveToEx(hdc, WVFRM_OFFSET, r.bottom - 1, nullptr);
+		LineTo(hdc, r.right - r.left + WVFRM_OFFSET, r.bottom - 1);
+		SelectObject(hdc, oldPen1);
+		DeleteObject(grayBrush);
+		DeleteObject(grayPen);
+		DeleteObject(grayHatch);
 
-		MoveToEx(hdc, WVFRM_OFFSET, 64, nullptr);
+		if (FALSE == ctx->IsMinimized) {
+			HPEN GreenPen = CreatePen(PS_SOLID, 1, RGB(0, 255, 0));
+			OldPen = SelectObject(hdc, GreenPen);
 
-		// get scroll bar pos
-		float pos = (float)mctx->scroll_pos;
-		UINT32 StartFrame = (UINT32)((pos / 65535.0f) * (float)mctx->max_frames);
-		UINT32 rpos = 0;
-		UINT32 RightLimit = (UINT32)r.right;
-		for (UINT32 FrameCount = StartFrame; FrameCount < mctx->max_frames; FrameCount += mctx->zoom_mult) {
-			rpos = (FrameCount - StartFrame) / mctx->zoom_mult + WVFRM_OFFSET;
-			if (rpos > RightLimit) break;
-			LineTo(hdc, rpos, (ctx->monobuffershort[FrameCount] / 512) + 64);
+			MoveToEx(hdc, WVFRM_OFFSET, 64, nullptr);
+
+			// get scroll bar pos
+			float pos = (float)mctx->hscroll_pos;
+			UINT32 StartFrame = (UINT32)((pos / 65535.0f) * (float)mctx->max_frames);
+			UINT32 rpos = 0;
+			UINT32 RightLimit = (UINT32)r.right;
+			for (UINT32 FrameCount = StartFrame; FrameCount < mctx->max_frames; FrameCount += mctx->zoom_mult) {
+				rpos = (FrameCount - StartFrame) / mctx->zoom_mult + WVFRM_OFFSET;
+				if (rpos > RightLimit) break;
+				LineTo(hdc, rpos, (ctx->monobuffershort[FrameCount] / 512) + 64);
+			}
+			SelectObject(hdc, OldPen);
+			DeleteObject(GreenPen);
 		}
 
-		SelectObject(hdc, OldPen);
-		DeleteObject(GreenPen);
-		DeleteObject(GreenBrush);
-		DeleteObject(RedBrush);
+		memset(WindowName, 0, 16 * sizeof(wchar_t));
+		GetWindowText(hWnd, WindowName, 16);
+
+		SetTextColor(hdc, 0x00000000);
+		r1.left = r1.top = 0;
+		r1.right = WVFRM_OFFSET;
+		r1.bottom = 32;
+		DrawText(hdc, WindowName, wcslen(WindowName), &r1, DT_LEFT | DT_TOP);
+
 		EndPaint(hWnd, &ps);
 
 	}
@@ -77,8 +109,50 @@ namespace MusicStudioCX
 	{
 		TrackContext * ctx = nullptr;
 		MainWindowContext* mctx = nullptr;
+		WORD mx = 0, my = 0;
+		RECT wr;
+		UINT32 itemHeight = 0;
 		switch (message)
 		{
+		case WM_LBUTTONDBLCLK:
+			ctx = get_track_context(hWnd);
+			mx = LOWORD(lParam);
+			my = HIWORD(lParam);
+			if (mx > 0 && mx < WVFRM_OFFSET && my > 0 && my < 32) {
+				if (ctx->IsMinimized == FALSE) {
+					ctx->IsMinimized = TRUE;
+					//ShowWindow(ctx->buttons[0], SW_HIDE);
+					//ShowWindow(ctx->buttons[1], SW_HIDE);
+					//ShowWindow(ctx->buttons[2], SW_HIDE);
+					//GetWindowRect(hWnd, &wr);
+					//SetWindowPos(hWnd, nullptr, 0, 0, wr.right - wr.left, 32, SWP_NOZORDER | SWP_NOMOVE);
+					//InvalidateRect(hWnd, nullptr, FALSE);
+					//while (ctx->NextTrackWindow != nullptr) {
+						//ctx = get_track_context(ctx->NextTrackWindow);
+						//GetWindowRect(ctx->TrackWindow, &wr);
+						//SetWindowPos(ctx->TrackWindow, nullptr, 0, (ctx->TrackIndex * 128) - 96 + 32, 0, 0, SWP_NOZORDER | SWP_NOSIZE);
+						//InvalidateRect(ctx->TrackWindow, nullptr, FALSE);
+					//};
+				}
+				else {
+					ctx->IsMinimized = FALSE;
+					//ShowWindow(ctx->buttons[0], SW_SHOW);
+					//ShowWindow(ctx->buttons[1], SW_SHOW);
+					//ShowWindow(ctx->buttons[2], SW_SHOW);
+					//GetWindowRect(hWnd, &wr);
+					//SetWindowPos(hWnd, nullptr, 0, 0, wr.right - wr.left, 128, SWP_NOZORDER | SWP_NOMOVE);
+					//InvalidateRect(hWnd, nullptr, FALSE);
+					//while (ctx->NextTrackWindow != nullptr) {
+						//ctx = get_track_context(ctx->NextTrackWindow);
+						//GetWindowRect(ctx->TrackWindow, &wr);
+						//SetWindowPos(ctx->TrackWindow, nullptr, 0, (ctx->TrackIndex * 128) + 32, 0, 0, SWP_NOZORDER | SWP_NOSIZE);
+						//InvalidateRect(ctx->TrackWindow, nullptr, FALSE);
+					//};
+				}
+				mctx = (MainWindowContext*)GetWindowLongPtr(GetParent(hWnd), GWLP_USERDATA);
+				reposition_all_tracks(mctx);
+			}
+			break;
 		case WM_COMMAND:
 			ctx = get_track_context(hWnd);
 			switch (LOWORD(wParam)) {
@@ -109,7 +183,12 @@ namespace MusicStudioCX
 			DrawTrackWindow(hWnd);
 			break;
 		case WM_SIZE:
-			SetWindowPos(hWnd, nullptr, 0, 0, LOWORD(lParam), 128, SWP_NOMOVE|SWP_NOZORDER);
+			ctx = get_track_context(hWnd);
+			itemHeight = 128;
+			if (ctx != nullptr) {
+				if (TRUE == ctx->IsMinimized) itemHeight = 32;
+			}
+			SetWindowPos(hWnd, nullptr, 0, 0, LOWORD(lParam), itemHeight, SWP_NOMOVE | SWP_NOZORDER);
 			break;
 		default:
 			return DefWindowProc(hWnd, message, wParam, lParam);
@@ -127,7 +206,7 @@ namespace MusicStudioCX
 		wcctl.hInstance = GetModuleHandle(nullptr);
 		wcctl.lpfnWndProc = track_wnd_callback;
 		wcctl.lpszClassName = L"CXTrackWindowClass";
-		wcctl.style = CS_HREDRAW | CS_VREDRAW;
+		wcctl.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
 		wcctl.cbWndExtra = sizeof(TrackContext*);  // <-- Here we are
 
 		RegisterClass(&wcctl);
@@ -145,6 +224,7 @@ namespace MusicStudioCX
 		ctx->leftpan = 1.0f;
 		ctx->rightpan = 1.0f;
 		ctx->volume = 1.0f;
+		ctx->IsMinimized = FALSE;
 		ctx->monobuffershort = (short*)malloc(SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
 		memset(ctx->monobuffershort, 0, SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
 		return ctx;
@@ -160,18 +240,18 @@ namespace MusicStudioCX
 		mctx->TrackContextList[idx] = allocate_context(mctx, parent, channel);
 
 		GetWindowRect(parent, &r);
-		HWND hwnd = CreateWindow(L"CXTrackWindowClass", L"TrackName",
+		HWND hwnd = CreateWindow(L"CXTrackWindowClass", TrackName,
 			WS_CHILD | WS_VISIBLE,
-			0, (idx * 128) + 32, r.right - r.left, 128,
+			0, (idx * 128) + MAIN_WINDOW_HEADER_HEIGHT, r.right - r.left, 128,
 			parent, nullptr, GetModuleHandle(nullptr), nullptr);
 
 		mctx->TrackContextList[idx]->TrackWindow = hwnd;
 		SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)mctx->TrackContextList[idx]);
 
 		// create some controls here
-		CXCommon::CreateButton(hwnd, 0, 0, 48, 32, L"Rec", BTN_ARM_REC);
-		CXCommon::CreateButton(hwnd, 0, 32, 48, 32, L"Mute", BTN_MUTE_TRACK);
-		CXCommon::CreateButton(hwnd, 0, 64, 48, 32, L"Prop", BTN_TRACK_PROP);
+		mctx->TrackContextList[idx]->buttons[0] = CXCommon::CreateButton(hwnd, 0, 32, 48, 32, L"Rec", BTN_ARM_REC);
+		mctx->TrackContextList[idx]->buttons[1] = CXCommon::CreateButton(hwnd, 0, 64, 48, 32, L"Mute", BTN_MUTE_TRACK);
+		mctx->TrackContextList[idx]->buttons[2] = CXCommon::CreateButton(hwnd, 0, 96, 48, 32, L"Prop", BTN_TRACK_PROP);
 
 		return mctx->TrackContextList[idx];
 	}
