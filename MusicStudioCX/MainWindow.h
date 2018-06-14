@@ -13,9 +13,10 @@ namespace MusicStudioCX
 		UINT32 max_frames;
 		UINT32 hscroll_pos;
 		UINT32 vscroll_pos;
-		TrackContext* TrackContextList[16];
+		TrackContext* TrackContextList[NUM_TRACKS];
 		LPRTA_DEVICE_INFO CaptureDevInfo = nullptr;
 		LPRTA_DEVICE_INFO RenderDevInfo = nullptr;
+		wchar_t WavFileName[1024];
 	} MainWindowContext;
 
 	void initialize_main_window();

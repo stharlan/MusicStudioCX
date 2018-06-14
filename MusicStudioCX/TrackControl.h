@@ -10,6 +10,8 @@
 #define BLOCK_ALIGN (NUM_CHANNELS * BITS_PER_SAMPLE) / 8
 #define FRAME_SIZE BLOCK_ALIGN
 #define AVG_BYTES_PER_SEC BLOCK_ALIGN * SAMPLES_PER_SEC
+#define REC_TIME_SECONDS 5 * 60
+#define NUM_TRACKS 16
 
 typedef struct {
 	short* monobuffershort;
