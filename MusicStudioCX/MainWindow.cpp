@@ -1,6 +1,12 @@
 
 #include "stdafx.h"
 
+#define BTN_ZOOM_IN 30000
+#define BTN_ZOOM_OUT 30001
+#define BTN_REC 30002
+#define BTN_PLAY 30003
+#define BTN_STOP 30004
+
 namespace MusicStudioCX
 {
 
@@ -14,12 +20,8 @@ namespace MusicStudioCX
 
 	HWND hwndMainWindow = nullptr;
 	HWND hwndStatus = nullptr;
-	HWND ZoomInButton = nullptr;
-	HWND ZoomOutButton = nullptr;
-	HWND AddTrackButton = nullptr;
-	HWND RecButton = nullptr;
-	HWND PlayButton = nullptr;
-	HWND StopButton = nullptr;
+
+	BOOL TriggerStop = FALSE;
 
 	WAVEFORMATEX StandardFormatInDefault = {
 		WAVE_FORMAT_PCM,
@@ -40,6 +42,8 @@ namespace MusicStudioCX
 		BITS_PER_SAMPLE,
 		0 // extra bytes
 	};
+
+	void RedrawTimeBar();
 
 	void CreateStatusBar(HWND hwndParent)
 	{
@@ -62,10 +66,23 @@ namespace MusicStudioCX
 		SendMessage(hwndStatus, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)STATUS_READY);
 	}
 
-	void CaptureDataHandler(BYTE* buffer, UINT32 frameCount, BOOL* Cancel)
+	void CaptureDataHandler(BYTE* capBuffer, BYTE* renBuffer, UINT32 frameCount, BOOL* Cancel)
 	{
+
+		// get data from the capBuffer and put it in the track
+
 		wchar_t msg[256];
-		FRAME2CHSHORT *CapturedDataBuffer = (FRAME2CHSHORT*)buffer;
+		FRAME2CHSHORT *CapturedDataBuffer = (FRAME2CHSHORT*)capBuffer;
+		FRAME2CHSHORT *RenderingDataBuffer = (FRAME2CHSHORT*)renBuffer;
+
+		if (TRUE == TriggerStop) {
+			*Cancel = TRUE;
+			return;
+		}
+
+		// render the input data
+		// change this later to render all non-triggered, non-muted tracks
+		memcpy(RenderingDataBuffer, CapturedDataBuffer, frameCount * sizeof(FRAME2CHSHORT));
 
 		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);
 		if (frameCount < (mctx->max_frames - mctx->frame_offset)) {
@@ -82,8 +99,13 @@ namespace MusicStudioCX
 			mctx->frame_offset += frameCount;
 
 			memset(msg, 0, 256 * sizeof(wchar_t));
-			swprintf_s(msg, 256, L"Frame Offset %i", mctx->frame_offset);
+			UINT32 mframe = mctx->frame_offset % 48000;
+			UINT32 msec = mctx->frame_offset / 48000;
+			UINT32 mmin = msec / 60;
+			msec = msec % 60;
+			swprintf_s(msg, 256, L"%i min %i sec %i frm", mmin, msec, mframe);
 			SendMessage(hwndStatus, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
+			RedrawTimeBar();
 		}
 		else {
 			for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
@@ -107,9 +129,8 @@ namespace MusicStudioCX
 
 	DWORD CaptureThread(LPVOID lpThreadParameter)
 	{
-		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);
-		LPRTA_DEVICE_INFO devInfo = (LPRTA_DEVICE_INFO)lpThreadParameter;
-		rta_capture_frames_rtwq(devInfo, nullptr, CaptureDataHandler);
+		MainWindowContext* mctx = (MainWindowContext*)lpThreadParameter;
+		rta_capture_frames_rtwq(mctx->CaptureDevInfo, mctx->RenderDevInfo, CaptureDataHandler);
 
 		for (UINT32 TrackIndex = mctx->vscroll_pos; TrackIndex < NUM_TRACKS; TrackIndex++) {
 			if (mctx->TrackContextList[TrackIndex] != nullptr) {
@@ -127,7 +148,9 @@ namespace MusicStudioCX
 		SendMessage(hwndStatus, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
 		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);
 		mctx->frame_offset = 0;
-		if (TRUE == rta_initialize_device_2(mctx->CaptureDevInfo, AUDCLNT_STREAMFLAGS_EVENTCALLBACK))
+		BOOL isCapOk = rta_initialize_device_2(mctx->CaptureDevInfo, AUDCLNT_STREAMFLAGS_EVENTCALLBACK);
+		BOOL isRenOk = rta_initialize_device_2(mctx->RenderDevInfo, 0);
+		if (isCapOk && isRenOk)
 		{
 			swprintf_s(msg, 256, L"%i sps %i bps %i ch %zi szflt",
 				mctx->CaptureDevInfo->WaveFormat.nSamplesPerSec,
@@ -136,7 +159,8 @@ namespace MusicStudioCX
 				sizeof(float));
 			if (g_hCaptureThread) CloseHandle(g_hCaptureThread);
 			g_hCaptureThread = INVALID_HANDLE_VALUE;
-			g_hCaptureThread = CreateThread(nullptr, (SIZE_T)0, CaptureThread, (LPVOID)mctx->CaptureDevInfo, 0, nullptr);
+			TriggerStop = FALSE;
+			g_hCaptureThread = CreateThread(nullptr, (SIZE_T)0, CaptureThread, (LPVOID)mctx, 0, nullptr);
 		}
 	}
 
@@ -145,14 +169,19 @@ namespace MusicStudioCX
 
 	}
 
-	void RenderDataHandler(BYTE* buffer, UINT32 frameCount, BOOL* Cancel)
+	void RenderDataHandler(BYTE* capBuffer, BYTE* renBuffer, UINT32 frameCount, BOOL* Cancel)
 	{
 		wchar_t msg[256];
-		FRAME2CHSHORT *CapturedDataBuffer = (FRAME2CHSHORT*)buffer;
+		FRAME2CHSHORT *CapturedDataBuffer = (FRAME2CHSHORT*)renBuffer;
 		TrackContext* lpTrackCtx = nullptr;
 		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);	
 		// max number of output channels = 2
 		float fval[2];
+
+		if (TRUE == TriggerStop) {
+			*Cancel = TRUE;
+			return;
+		}
 
 		if (frameCount < (mctx->max_frames - mctx->frame_offset)) {
 			UINT32 nFrames = frameCount;
@@ -177,10 +206,15 @@ namespace MusicStudioCX
 
 			mctx->frame_offset += frameCount;
 
-			FRAME2CHSHORT* pOut = (FRAME2CHSHORT*)buffer;
+			FRAME2CHSHORT* pOut = (FRAME2CHSHORT*)renBuffer;
 			memset(msg, 0, 256 * sizeof(wchar_t));
-			swprintf_s(msg, 256, L"Render Data %i", mctx->frame_offset);
+			UINT32 mframe = mctx->frame_offset % 48000;
+			UINT32 msec = mctx->frame_offset / 48000;
+			UINT32 mmin = msec / 60;
+			msec = msec % 60;
+			swprintf_s(msg, 256, L"%i min %i sec %i frm", mmin, msec, mframe);
 			SendMessage(hwndStatus, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
+			RedrawTimeBar();
 		}
 		else {
 			UINT32 nFrames = mctx->max_frames - mctx->frame_offset;
@@ -235,6 +269,7 @@ namespace MusicStudioCX
 		{
 			if (g_hRenderThread) CloseHandle(g_hRenderThread);
 			g_hRenderThread = INVALID_HANDLE_VALUE;
+			TriggerStop = FALSE;
 			g_hRenderThread = CreateThread(nullptr, (SIZE_T)0, RenderThread, (LPVOID)mctx->RenderDevInfo, 0, nullptr);
 		}
 	}
@@ -332,16 +367,16 @@ namespace MusicStudioCX
 		return (INT_PTR)FALSE;
 	}
 
-	void RedrawTimeBar(HWND hwnd)
+	void RedrawTimeBar()
 	{
 		RECT cr;
-		GetClientRect(hwnd, &cr);
+		GetClientRect(hwndMainWindow, &cr);
 		RECT r = { 0 };
 		r.left = WVFRM_OFFSET;
 		r.top = 32;
 		r.right = cr.right;
 		r.bottom = 64;
-		InvalidateRect(hwnd, &r, FALSE);
+		InvalidateRect(hwndMainWindow, &r, FALSE);
 	}
 
 	void DrawTimeBar(HWND hwnd, HDC hdc, MainWindowContext* mctx)
@@ -468,10 +503,19 @@ namespace MusicStudioCX
 		//		DrawText(hdc, timeval, wcslen(timeval), &tr, DT_TOP | DT_LEFT);
 		//	}
 		//}
-		SelectObject(hdc, oldPen);
-		DeleteObject(WhitePen);
 		SetTextColor(hdc, oldTextColor);
 		SetBkColor(hdc, oldBackColor);
+
+		if (mctx->frame_offset > StartFrame && mctx->frame_offset < EndFrame) {
+			// draw a marker
+			UINT32 pos = ((mctx->frame_offset - StartFrame) / mctx->zoom_mult) + WVFRM_OFFSET;
+			MoveToEx(hdc, pos, 48, nullptr);
+			LineTo(hdc, pos, 64);
+		}
+
+		SelectObject(hdc, oldPen);
+		DeleteObject(WhitePen);
+
 	}
 
 	void SaveFileAs(HWND hwnd) {
@@ -605,53 +649,50 @@ namespace MusicStudioCX
 		{
 			mctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
 			hwndCommand = (HWND)lParam;
-			if (hwndCommand == ZoomInButton) {
+			int wmId = LOWORD(wParam);
+			switch (wmId)
+			{
+			case BTN_ZOOM_IN:
 				if (mctx->zoom_mult > 1) mctx->zoom_mult /= 2;
 				for (UINT32 TrackIndex = mctx->vscroll_pos; TrackIndex < NUM_TRACKS; TrackIndex++) {
 					if (mctx->TrackContextList[TrackIndex] != nullptr) {
 						InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
 					}
 				}
-				RedrawTimeBar(hWnd);
-			}
-			else if (hwndCommand == ZoomOutButton) {
+				RedrawTimeBar();
+				break;
+			case BTN_ZOOM_OUT:
 				mctx->zoom_mult *= 2;
 				for (UINT32 TrackIndex = mctx->vscroll_pos; TrackIndex < NUM_TRACKS; TrackIndex++) {
 					if (mctx->TrackContextList[TrackIndex] != nullptr) {
 						InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
 					}
 				}
-				RedrawTimeBar(hWnd);
-			}
-			else if (hwndCommand == AddTrackButton) {
-				MusicStudioCX::create_track_window_a(hWnd, L"New Track", 0);
-			}
-			else if (hwndCommand == PlayButton) {
+				RedrawTimeBar();
+				break;
+			case BTN_PLAY:
 				StartPlayback();
-			}
-			else if (hwndCommand == RecButton) {
+				break;
+			case BTN_REC:
 				StartRecording();
-			}
-			else {
-				int wmId = LOWORD(wParam);
-				// Parse the menu selections:
-				switch (wmId)
-				{
-				case IDM_ABOUT:
-					DialogBox(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
-					break;
-				case IDM_EXIT:
-					DestroyWindow(hWnd);
-					break;
-				case ID_FILE_SETUP:
-					DialogBox(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDD_SETUPDLG), hWnd, SetupDlgProc);
-					break;
-				case ID_FILE_SAVEAS:
-					SaveFileAs(hWnd);
-					break;
-				default:
-					return DefWindowProc(hWnd, message, wParam, lParam);
-				}
+				break;
+			case BTN_STOP:
+				TriggerStop = TRUE;
+				break;
+			case IDM_ABOUT:
+				DialogBox(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
+				break;
+			case IDM_EXIT:
+				DestroyWindow(hWnd);
+				break;
+			case ID_FILE_SETUP:
+				DialogBox(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDD_SETUPDLG), hWnd, SetupDlgProc);
+				break;
+			case ID_FILE_SAVEAS:
+				SaveFileAs(hWnd);
+				break;
+			default:
+				return DefWindowProc(hWnd, message, wParam, lParam);
 			}
 		}
 		break;
@@ -737,7 +778,7 @@ namespace MusicStudioCX
 						InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
 					}
 				}
-				RedrawTimeBar(hWnd);
+				RedrawTimeBar();
 				break;
 			case SB_THUMBPOSITION:
 				SetScrollPos(hWnd, SB_HORZ, HIWORD(wParam), TRUE);
@@ -748,7 +789,7 @@ namespace MusicStudioCX
 						InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
 					}
 				}
-				RedrawTimeBar(hWnd);
+				RedrawTimeBar();
 				break;
 			}
 			break;
@@ -796,12 +837,11 @@ namespace MusicStudioCX
 			CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
 		CreateStatusBar(hwndMainWindow);
 
-		ZoomInButton = CXCommon::CreateButton(hwndMainWindow, 0, 0, 64, 32, L"ZIN", 1);
-		ZoomOutButton = CXCommon::CreateButton(hwndMainWindow, 64, 0, 64, 32, L"ZOUT", 2);
-		AddTrackButton = CXCommon::CreateButton(hwndMainWindow, 128, 0, 64, 32, L"NWTR", 3);
-		PlayButton = CXCommon::CreateButton(hwndMainWindow, 192, 0, 64, 32, L"PLAY", 3);
-		RecButton = CXCommon::CreateButton(hwndMainWindow, 256, 0, 64, 32, L"RECD", 3);
-		StopButton = CXCommon::CreateButton(hwndMainWindow, 320, 0, 64, 32, L"STOP", 3);
+		CXCommon::CreateButton(hwndMainWindow, 0, 0, 64, 32, L"ZIN", BTN_ZOOM_IN);
+		CXCommon::CreateButton(hwndMainWindow, 64, 0, 64, 32, L"ZOUT", BTN_ZOOM_OUT);
+		CXCommon::CreateButton(hwndMainWindow, 128, 0, 64, 32, L"PLAY", BTN_PLAY);
+		CXCommon::CreateButton(hwndMainWindow, 192, 0, 64, 32, L"RECD", BTN_REC);
+		CXCommon::CreateButton(hwndMainWindow, 256, 0, 64, 32, L"STOP", BTN_STOP);
 
 		// set scroll bar info
 		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);

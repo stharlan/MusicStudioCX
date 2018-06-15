@@ -118,7 +118,9 @@ STDMETHODIMP RtaAudioHandler::Invoke(IRtwqAsyncResult* pAsyncResult)
 
 	// run data through handler
 	if (this->pHandler != NULL) {
-		pHandler(this->lpCaptureDeviceInfo->FrameBufferByte, this->FrameCount, &handlerResult);
+		pHandler(this->lpCaptureDeviceInfo->FrameBufferByte, 
+			this->lpRenderDeviceInfo->FrameBufferByte, 
+			this->FrameCount, &handlerResult);
 	}
 
 	// if rendering
@@ -142,7 +144,7 @@ STDMETHODIMP RtaAudioHandler::Invoke(IRtwqAsyncResult* pAsyncResult)
 			if (SUCCEEDED(hr)) {
 
 				// copy capture device buffer into render buffer
-				memcpy(this->pRenBuffer, this->lpCaptureDeviceInfo->FrameBufferByte,
+				memcpy(this->pRenBuffer, this->lpRenderDeviceInfo->FrameBufferByte,
 					this->FrameCount * this->lpCaptureDeviceInfo->SizeOfFrame);
 
 				// release the render buffer
