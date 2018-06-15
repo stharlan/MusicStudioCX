@@ -66,37 +66,72 @@ namespace MusicStudioCX
 		SendMessage(hwndStatus, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)STATUS_READY);
 	}
 
-	void CaptureDataHandler(BYTE* capBuffer, BYTE* renBuffer, UINT32 frameCount, BOOL* Cancel)
+	void CaptureDataHandler(HANDLER_CONTEXT* lpHandlerContext, BOOL* lpCancel)
 	{
 
 		// get data from the capBuffer and put it in the track
 
 		wchar_t msg[256];
-		FRAME2CHSHORT *CapturedDataBuffer = (FRAME2CHSHORT*)capBuffer;
-		FRAME2CHSHORT *RenderingDataBuffer = (FRAME2CHSHORT*)renBuffer;
+		FRAME2CHSHORT *CapturedDataBuffer = (FRAME2CHSHORT*)(lpHandlerContext->capBuffer);
+		FRAME2CHSHORT *RenderingDataBuffer = (FRAME2CHSHORT*)(lpHandlerContext->renBuffer);
+		float fval[2];
+		TrackContext* lpTrackCtx = nullptr;
+		UINT32 CaptureFrameIndexAdjusted = 0;
 
 		if (TRUE == TriggerStop) {
-			*Cancel = TRUE;
+			*lpCancel = TRUE;
 			return;
 		}
 
-		// render the input data
-		// change this later to render all non-triggered, non-muted tracks
-		memcpy(RenderingDataBuffer, CapturedDataBuffer, frameCount * sizeof(FRAME2CHSHORT));
-
 		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);
-		if (frameCount < (mctx->max_frames - mctx->frame_offset)) {
+		UINT32 TotalLastFrameCount = (
+			lpHandlerContext->LastFrameCounts[0] + 
+			lpHandlerContext->LastFrameCounts[1] + 
+			lpHandlerContext->LastFrameCounts[2]);
+		printf("adjusted offset = %i\n", mctx->frame_offset - TotalLastFrameCount);
+		TrackContext** trackPtrs = mctx->TrackContextList;
+		if (lpHandlerContext->frameCount < (mctx->max_frames - mctx->frame_offset)) {
+
 			for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
-				if (mctx->TrackContextList[TrackIndex] != nullptr) {
-					if (MusicStudioCX::TrackIsArmed(mctx->TrackContextList[TrackIndex]->state)) {
-						for (UINT32 FrameIndex = 0; FrameIndex < frameCount; FrameIndex++) {
-							mctx->TrackContextList[TrackIndex]->monobuffershort[mctx->frame_offset + FrameIndex] =
-								CapturedDataBuffer[FrameIndex].channel[mctx->TrackContextList[TrackIndex]->InputChannelIndex];
+				if (trackPtrs[TrackIndex] != nullptr) {
+					if (MusicStudioCX::TrackIsArmed(trackPtrs[TrackIndex]->state)) {
+						// record to this track
+						for (UINT32 FrameIndex = 0; FrameIndex < lpHandlerContext->frameCount; FrameIndex++) {
+							// start with the frame offset
+							// add the frame index
+							// subtract the last frame count to bring it inline with the rendering
+							CaptureFrameIndexAdjusted = mctx->frame_offset + FrameIndex - TotalLastFrameCount;
+							trackPtrs[TrackIndex]->monobuffershort[CaptureFrameIndexAdjusted] =
+								CapturedDataBuffer[FrameIndex].channel[trackPtrs[TrackIndex]->InputChannelIndex];
 						}
 					}
 				}
 			}
-			mctx->frame_offset += frameCount;
+
+			// begin render
+			for (UINT32 FrameIndex = 0; FrameIndex < lpHandlerContext->frameCount; FrameIndex++) {
+				fval[0] = 0.0f;
+				fval[1] = 0.0f;
+				for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
+					lpTrackCtx = trackPtrs[TrackIndex];
+					if (lpTrackCtx != nullptr) {
+						if (FALSE == MusicStudioCX::TrackIsMute(lpTrackCtx->state) &&
+							FALSE == MusicStudioCX::TrackIsArmed(trackPtrs[TrackIndex]->state)) {
+							fval[0] += (float)lpTrackCtx->monobuffershort[mctx->frame_offset + FrameIndex] * lpTrackCtx->volume * lpTrackCtx->leftpan;
+							fval[1] += (float)lpTrackCtx->monobuffershort[mctx->frame_offset + FrameIndex] * lpTrackCtx->volume * lpTrackCtx->rightpan;
+						}
+					}
+				}
+				if (fval[0] > 32767.0f) fval[0] = 32767.0f;
+				if (fval[0] < -32767.0f) fval[0] = -32767.0f;
+				RenderingDataBuffer[FrameIndex].channel[0] = (short)fval[0];
+				if (fval[1] > 32767.0f) fval[1] = 32767.0f;
+				if (fval[1] < -32767.0f) fval[1] = -32767.0f;
+				RenderingDataBuffer[FrameIndex].channel[1] = (short)fval[1];
+			}
+			// end render
+
+			mctx->frame_offset += lpHandlerContext->frameCount;
 
 			memset(msg, 0, 256 * sizeof(wchar_t));
 			UINT32 mframe = mctx->frame_offset % 48000;
@@ -108,22 +143,48 @@ namespace MusicStudioCX
 			RedrawTimeBar();
 		}
 		else {
+			UINT32 nFrames = mctx->max_frames - mctx->frame_offset;
+
 			for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
-				if (mctx->TrackContextList[TrackIndex] != nullptr) {
-					if (MusicStudioCX::TrackIsArmed(mctx->TrackContextList[TrackIndex]->state)) {
-						UINT32 nFrames = mctx->max_frames - mctx->frame_offset;
+				if (trackPtrs[TrackIndex] != nullptr) {
+					if (MusicStudioCX::TrackIsArmed(trackPtrs[TrackIndex]->state)) {
 						for (UINT32 FrameIndex = 0; FrameIndex < nFrames; FrameIndex++) {
-							mctx->TrackContextList[TrackIndex]->monobuffershort[mctx->frame_offset + FrameIndex] =
-								CapturedDataBuffer[FrameIndex].channel[mctx->TrackContextList[TrackIndex]->InputChannelIndex];
+							CaptureFrameIndexAdjusted = mctx->frame_offset + FrameIndex - TotalLastFrameCount;
+							trackPtrs[TrackIndex]->monobuffershort[CaptureFrameIndexAdjusted] =
+								CapturedDataBuffer[FrameIndex].channel[trackPtrs[TrackIndex]->InputChannelIndex];
 						}
 					}
 				}
 			}
-			mctx->frame_offset += (mctx->max_frames - mctx->frame_offset);
+
+			// begin render
+			for (UINT32 FrameIndex = 0; FrameIndex < nFrames; FrameIndex++) {
+				fval[0] = 0.0f;
+				fval[1] = 0.0f;
+				for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
+					lpTrackCtx = trackPtrs[TrackIndex];
+					if (lpTrackCtx != nullptr) {
+						if (FALSE == MusicStudioCX::TrackIsMute(lpTrackCtx->state) &&
+							FALSE == MusicStudioCX::TrackIsArmed(trackPtrs[TrackIndex]->state)) {
+							fval[0] += (float)lpTrackCtx->monobuffershort[mctx->frame_offset + FrameIndex] * lpTrackCtx->volume * lpTrackCtx->leftpan;
+							fval[1] += (float)lpTrackCtx->monobuffershort[mctx->frame_offset + FrameIndex] * lpTrackCtx->volume * lpTrackCtx->rightpan;
+						}
+					}
+				}
+				if (fval[0] > 32767.0f) fval[0] = 32767.0f;
+				if (fval[0] < -32767.0f) fval[0] = -32767.0f;
+				RenderingDataBuffer[FrameIndex].channel[0] = (short)fval[0];
+				if (fval[1] > 32767.0f) fval[1] = 32767.0f;
+				if (fval[1] < -32767.0f) fval[1] = -32767.0f;
+				RenderingDataBuffer[FrameIndex].channel[1] = (short)fval[1];
+			}
+			// end render
+
+			mctx->frame_offset += nFrames;
 
 			swprintf_s(msg, 256, L"Done.");
 			SendMessage(hwndStatus, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
-			*Cancel = TRUE;
+			*lpCancel = TRUE;
 		}
 	}
 
@@ -169,24 +230,25 @@ namespace MusicStudioCX
 
 	}
 
-	void RenderDataHandler(BYTE* capBuffer, BYTE* renBuffer, UINT32 frameCount, BOOL* Cancel)
+	void RenderDataHandler(HANDLER_CONTEXT* lpHandlerContext, BOOL* lpCancel)
 	{
 		wchar_t msg[256];
-		FRAME2CHSHORT *RenderingDataBuffer = (FRAME2CHSHORT*)renBuffer;
+		FRAME2CHSHORT *RenderingDataBuffer = (FRAME2CHSHORT*)(lpHandlerContext->renBuffer);
 		TrackContext* lpTrackCtx = nullptr;
 		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);	
 		// max number of output channels = 2
 		float fval[2];
 
 		if (TRUE == TriggerStop) {
-			*Cancel = TRUE;
+			*lpCancel = TRUE;
 			return;
 		}
 
-		if (frameCount < (mctx->max_frames - mctx->frame_offset)) {
-			UINT32 nFrames = frameCount;
+		if (lpHandlerContext->frameCount < (mctx->max_frames - mctx->frame_offset)) {
+			UINT32 nFrames = lpHandlerContext->frameCount;
 			for (UINT32 FrameIndex = 0; FrameIndex < nFrames; FrameIndex++) {
-				memset(fval, 0, sizeof(float) * 2);
+				fval[0] = 0.0f;
+				fval[1] = 0.0f;
 				for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
 					lpTrackCtx = mctx->TrackContextList[TrackIndex];
 					if (lpTrackCtx != nullptr) {
@@ -204,9 +266,8 @@ namespace MusicStudioCX
 				RenderingDataBuffer[FrameIndex].channel[1] = (short)fval[1];
 			}
 
-			mctx->frame_offset += frameCount;
+			mctx->frame_offset += lpHandlerContext->frameCount;
 
-			FRAME2CHSHORT* pOut = (FRAME2CHSHORT*)renBuffer;
 			memset(msg, 0, 256 * sizeof(wchar_t));
 			UINT32 mframe = mctx->frame_offset % 48000;
 			UINT32 msec = mctx->frame_offset / 48000;
@@ -219,7 +280,8 @@ namespace MusicStudioCX
 		else {
 			UINT32 nFrames = mctx->max_frames - mctx->frame_offset;
 			for (UINT32 FrameIndex = 0; FrameIndex < nFrames; FrameIndex++) {
-				memset(fval, 0, sizeof(float) * 2);
+				fval[0] = 0.0f;
+				fval[1] = 0.0f;
 				for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
 					lpTrackCtx = mctx->TrackContextList[TrackIndex];
 					if (lpTrackCtx != nullptr) {
@@ -241,7 +303,7 @@ namespace MusicStudioCX
 
 			swprintf_s(msg, 256, L"Render Data; Done.");
 			SendMessage(hwndStatus, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
-			*Cancel = TRUE;
+			*lpCancel = TRUE;
 		}
 	}
 

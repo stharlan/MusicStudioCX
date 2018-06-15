@@ -14,7 +14,14 @@ typedef struct {
 	WAVEFORMATEX WaveFormat;
 } RTA_DEVICE_INFO, *LPRTA_DEVICE_INFO;
 
-typedef void(*RTA_DATA_HANDLER)(BYTE* capBuffer, BYTE* renBuffer, UINT32 frameCount, BOOL* Cancel);
+typedef struct {
+	BYTE* capBuffer;
+	BYTE* renBuffer;
+	UINT32 frameCount;
+	UINT32 LastFrameCounts[3];
+} HANDLER_CONTEXT;
+
+typedef void(*RTA_DATA_HANDLER)(HANDLER_CONTEXT* lpHandlerContext, BOOL* lpCancel);
 
 const char* rta_get_last_error();
 

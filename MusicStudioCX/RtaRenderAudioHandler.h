@@ -41,5 +41,6 @@ private:
 
 	LPRTA_DEVICE_INFO lpRenderDeviceInfo;
 	RTA_DATA_HANDLER pHandler;
+	HANDLER_CONTEXT hdlrCtx;
 };
 

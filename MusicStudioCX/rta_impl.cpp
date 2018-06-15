@@ -460,6 +460,7 @@ void rta_render_frames_rtwq(LPRTA_DEVICE_INFO lpRenderDeviceInfo, RTA_DATA_HANDL
 	// block and wait for handler to complete
 	printf("Waiting for stop signal...\n");
 	WaitForSingleObject(g_RtwqStop, INFINITE);
+	printf("Got stop signal...\n");
 
 	// stop capture and render
 	lpRenderDeviceInfo->pAudioClient->Stop();
@@ -581,6 +582,7 @@ void rta_capture_frames_rtwq(LPRTA_DEVICE_INFO lpCaptureDeviceInfo,
 	// block and wait for handler to complete
 	printf("Waiting for stop signal...\n");
 	WaitForSingleObject(g_RtwqStop, INFINITE);
+	printf("Got stop signal...\n");
 
 	// stop capture and render
 	hr = lpCaptureDeviceInfo->pAudioClient->Stop();

@@ -19,6 +19,7 @@ RtaRenderAudioHandler::RtaRenderAudioHandler()
 	this->flags = 0;
 	this->lpRenderDeviceInfo = NULL;
 	this->pHandler = NULL;
+	memset(&this->hdlrCtx, 0, sizeof(HANDLER_CONTEXT));
 }
 
 // cleanup the audio handler
@@ -114,7 +115,10 @@ STDMETHODIMP RtaRenderAudioHandler::Invoke(IRtwqAsyncResult* pAsyncResult)
 	if (this->FrameCount <= avail) {
 
 		memset(this->lpRenderDeviceInfo->FrameBufferByte, 0, this->FrameCount * this->lpRenderDeviceInfo->SizeOfFrame);
-		pHandler(nullptr, this->lpRenderDeviceInfo->FrameBufferByte, this->FrameCount, &handlerResult);
+
+		hdlrCtx.renBuffer = this->lpRenderDeviceInfo->FrameBufferByte;
+		hdlrCtx.frameCount = this->FrameCount;
+		pHandler(&hdlrCtx, &handlerResult);
 
 		// get buffer from the render client
 		ThrowIfFailed(pAudioRenderClient->GetBuffer(this->FrameCount, &this->pRenBuffer));

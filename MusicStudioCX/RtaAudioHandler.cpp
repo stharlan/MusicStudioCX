@@ -22,6 +22,7 @@ RtaAudioHandler::RtaAudioHandler()
 	this->lpCaptureDeviceInfo = NULL;
 	this->lpRenderDeviceInfo = NULL;
 	this->pHandler = NULL;
+	memset(&this->hdlrCtx, 0, sizeof(HANDLER_CONTEXT));
 }
 
 // cleanup the audio handler
@@ -118,9 +119,13 @@ STDMETHODIMP RtaAudioHandler::Invoke(IRtwqAsyncResult* pAsyncResult)
 
 	// run data through handler
 	if (this->pHandler != NULL) {
-		pHandler(this->lpCaptureDeviceInfo->FrameBufferByte, 
-			this->lpRenderDeviceInfo->FrameBufferByte, 
-			this->FrameCount, &handlerResult);
+		hdlrCtx.capBuffer = this->lpCaptureDeviceInfo->FrameBufferByte;
+		hdlrCtx.renBuffer = this->lpRenderDeviceInfo->FrameBufferByte;
+		hdlrCtx.frameCount = this->FrameCount;
+		pHandler(&hdlrCtx, &handlerResult);
+		hdlrCtx.LastFrameCounts[2] = hdlrCtx.LastFrameCounts[1];
+		hdlrCtx.LastFrameCounts[1] = hdlrCtx.LastFrameCounts[0];
+		hdlrCtx.LastFrameCounts[0] = this->FrameCount;
 	}
 
 	// if rendering
