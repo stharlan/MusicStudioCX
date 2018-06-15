@@ -172,7 +172,7 @@ namespace MusicStudioCX
 	void RenderDataHandler(BYTE* capBuffer, BYTE* renBuffer, UINT32 frameCount, BOOL* Cancel)
 	{
 		wchar_t msg[256];
-		FRAME2CHSHORT *CapturedDataBuffer = (FRAME2CHSHORT*)renBuffer;
+		FRAME2CHSHORT *RenderingDataBuffer = (FRAME2CHSHORT*)renBuffer;
 		TrackContext* lpTrackCtx = nullptr;
 		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);	
 		// max number of output channels = 2
@@ -198,10 +198,10 @@ namespace MusicStudioCX
 				}
 				if (fval[0] > 32767.0f) fval[0] = 32767.0f;
 				if (fval[0] < -32767.0f) fval[0] = -32767.0f;
-				CapturedDataBuffer[FrameIndex].channel[0] = (short)fval[0];
+				RenderingDataBuffer[FrameIndex].channel[0] = (short)fval[0];
 				if (fval[1] > 32767.0f) fval[1] = 32767.0f;
 				if (fval[1] < -32767.0f) fval[1] = -32767.0f;
-				CapturedDataBuffer[FrameIndex].channel[1] = (short)fval[1];
+				RenderingDataBuffer[FrameIndex].channel[1] = (short)fval[1];
 			}
 
 			mctx->frame_offset += frameCount;
@@ -231,10 +231,10 @@ namespace MusicStudioCX
 				}
 				if (fval[0] > 32767.0f) fval[0] = 32767.0f;
 				if (fval[0] < -32767.0f) fval[0] = -32767.0f;
-				CapturedDataBuffer[FrameIndex].channel[0] = (short)fval[0];
+				RenderingDataBuffer[FrameIndex].channel[0] = (short)fval[0];
 				if (fval[1] > 32767.0f) fval[1] = 32767.0f;
 				if (fval[1] < -32767.0f) fval[1] = -32767.0f;
-				CapturedDataBuffer[FrameIndex].channel[1] = (short)fval[1];
+				RenderingDataBuffer[FrameIndex].channel[1] = (short)fval[1];
 			}
 
 			mctx->frame_offset += nFrames;
@@ -518,6 +518,34 @@ namespace MusicStudioCX
 
 	}
 
+	BOOL WriteABlockOfFrames(FRAME2CHSHORT* PointerToFrames, UINT32 FramesToWrite, HANDLE hFile)
+	{
+		DWORD nbw = 0;
+
+		// write the frames
+		UINT32 DataSizeToWrite = FramesToWrite * sizeof(FRAME2CHSHORT);
+		BOOL result = WriteFile(hFile, (void*)(PointerToFrames),
+			DataSizeToWrite, &nbw, nullptr);
+
+		if (result == FALSE) {
+			DWORD err = GetLastError();
+			if (ERROR_INVALID_USER_BUFFER == err) {
+				MessageBox(nullptr, L"invalid user buffer", L"ERROR", MB_OK);
+				return FALSE;
+			}
+			else {
+				MessageBox(nullptr, L"failed to write", L"ERROR", MB_OK);
+				return FALSE;
+			}
+		}
+		else if (nbw < DataSizeToWrite) {
+			MessageBox(nullptr, L"not all bytes written", L"ERROR", MB_OK);
+			return FALSE;
+		}
+
+		return TRUE;
+	}
+
 	void SaveFileAs(HWND hwnd) {
 
 		DWORD nbw = 0;
@@ -541,7 +569,11 @@ namespace MusicStudioCX
 			if (hFile != nullptr) {
 
 				// write a wav file
-				UINT32 DataSize = REC_TIME_SECONDS * SAMPLES_PER_SEC * sizeof(short);
+				UINT32 DataSize = 
+					REC_TIME_SECONDS *	// secs of rec time
+					SAMPLES_PER_SEC *	// samples per sec
+					sizeof(short)		// size of a single sample
+					* 2;				// channels
 
 				WriteFile(hFile, "RIFF", 4, &nbw, nullptr);
 
@@ -566,7 +598,7 @@ namespace MusicStudioCX
 				WriteFile(hFile, &val16, sizeof(UINT16), &nbw, nullptr);
 
 				// channels 1 - for now
-				val16 = 1;
+				val16 = 2;
 				WriteFile(hFile, &val16, sizeof(UINT16), &nbw, nullptr);
 
 				// sample rate
@@ -574,11 +606,11 @@ namespace MusicStudioCX
 				WriteFile(hFile, &val32, sizeof(UINT32), &nbw, nullptr);
 
 				// byte rate
-				val32 = SAMPLES_PER_SEC * sizeof(short);
+				val32 = SAMPLES_PER_SEC * sizeof(short) * 2 /* channels */;
 				WriteFile(hFile, &val32, sizeof(UINT32), &nbw, nullptr);
 
 				// block align = channels * bits per sample / 8
-				val16 = sizeof(short);
+				val16 = sizeof(short) * 2 /* channels */;
 				WriteFile(hFile, &val16, sizeof(UINT16), &nbw, nullptr);
 
 				// bits per sample
@@ -592,26 +624,49 @@ namespace MusicStudioCX
 				WriteFile(hFile, &DataSize, sizeof(UINT32), &nbw, nullptr);
 
 				// write one of the buffers 
-				BOOL result = WriteFile(hFile, (void*)(mctx->TrackContextList[0]->monobuffershort),
-					DataSize, &nbw, nullptr);
+				//BOOL result = WriteFile(hFile, (void*)(mctx->TrackContextList[0]->monobuffershort),
+					//DataSize, &nbw, nullptr);
 
+				float fval[2];
+				FRAME2CHSHORT* FramesToWrite = (FRAME2CHSHORT*)malloc(SAMPLES_PER_SEC * sizeof(FRAME2CHSHORT));
+				UINT32 FrameCounter = 0;
+				TrackContext* lpTrackCtx = nullptr;
+				for (UINT32 FrameIndex = 0; FrameIndex < mctx->max_frames; FrameIndex++) {
+					memset(fval, 0, sizeof(float) * 2);
+					for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
+						lpTrackCtx = mctx->TrackContextList[TrackIndex];
+						if (lpTrackCtx != nullptr) {
+							if (FALSE == MusicStudioCX::TrackIsMute(lpTrackCtx->state)) {
+								fval[0] += (float)lpTrackCtx->monobuffershort[FrameIndex] * lpTrackCtx->volume * lpTrackCtx->leftpan;
+								fval[1] += (float)lpTrackCtx->monobuffershort[FrameIndex] * lpTrackCtx->volume * lpTrackCtx->rightpan;
+							}
+						}
+					}
+					if (fval[0] > 32767.0f) fval[0] = 32767.0f;
+					if (fval[0] < -32767.0f) fval[0] = -32767.0f;
+					FramesToWrite[FrameCounter].channel[0] = (short)fval[0];
+					if (fval[1] > 32767.0f) fval[1] = 32767.0f;
+					if (fval[1] < -32767.0f) fval[1] = -32767.0f;
+					FramesToWrite[FrameCounter].channel[1] = (short)fval[1];
+
+					FrameCounter++;
+					if (FrameCounter == SAMPLES_PER_SEC) {
+						if (FALSE == WriteABlockOfFrames(FramesToWrite, FrameCounter, hFile))
+							goto done;
+						FrameCounter = 0;
+					}
+				}
+
+			done:
+				// write any remaining frames
+				if (FrameCounter > 0) WriteABlockOfFrames(FramesToWrite, FrameCounter, hFile);
+
+				// free frame buffer
+				if (FramesToWrite) free(FramesToWrite);
+
+				// close file
 				CloseHandle(hFile);
-
-				if (result == FALSE) {
-					DWORD err = GetLastError();
-					if (ERROR_INVALID_USER_BUFFER == err) {
-						MessageBox(nullptr, L"invalid user buffer", L"ERROR", MB_OK);
-					}
-					else {
-						MessageBox(nullptr, L"failed to write", L"ERROR", MB_OK);
-					}
-				}
-				else if (nbw < val32) {
-					MessageBox(nullptr, L"not all bytes written", L"ERROR", MB_OK);
-				}
-
 			}
-
 		}
 	}
 
