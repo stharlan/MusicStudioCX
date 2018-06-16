@@ -12,21 +12,21 @@
 namespace MusicStudioCX
 {
 
-	WCHAR szWindowClass[MAX_LOADSTRING];            // the main window class name
-	WCHAR szTitle[MAX_LOADSTRING];                  // The title bar text
-	LPRTA_DEVICE_INFO lpCaptureDevices = nullptr;
-	LPRTA_DEVICE_INFO lpRenderDevices = nullptr;
-	HANDLE g_hCaptureThread = nullptr;
-	HANDLE g_hRenderThread = nullptr;
-	LPCWSTR STATUS_READY = L"Ready";
+	WCHAR m_szWindowClass[MAX_LOADSTRING];            // the main window class name
+	WCHAR m_szTitle[MAX_LOADSTRING];                  // The title bar text
+	LPRTA_DEVICE_INFO m_lpCaptureDevices = nullptr;
+	LPRTA_DEVICE_INFO m_lpRenderDevices = nullptr;
+	HANDLE m_hCaptureThread = nullptr;
+	HANDLE m_hRenderThread = nullptr;
+	LPCWSTR m_STATUS_READY = L"Ready";
 
-	HWND hwndMainWindow = nullptr;
-	HWND hwndStaticStatus = nullptr;
-	HWND hwndProgBar = nullptr;
+	HWND m_hwndMainWindow = nullptr;
+	HWND m_hwndStaticStatus = nullptr;
+	HWND m_hwndProgBar = nullptr;
 
-	BOOL TriggerStop = FALSE;
+	BOOL m_TriggerStop = FALSE;
 
-	WAVEFORMATEX StandardFormatInDefault = {
+	WAVEFORMATEX m_StandardFormatInDefault = {
 		WAVE_FORMAT_PCM,
 		NUM_CHANNELS,
 		SAMPLES_PER_SEC,
@@ -36,7 +36,7 @@ namespace MusicStudioCX
 		0 // extra bytes
 	};
 
-	WAVEFORMATEX StandardFormatOutDefault = {
+	WAVEFORMATEX m_StandardFormatOutDefault = {
 		WAVE_FORMAT_PCM,
 		NUM_CHANNELS,
 		SAMPLES_PER_SEC,
@@ -89,6 +89,49 @@ namespace MusicStudioCX
 	}
 	*/
 
+	bool GetFolder(std::wstring& folderpath,
+		const wchar_t* szCaption = NULL,
+		HWND hOwner = NULL)
+	{
+		bool retVal = false;
+
+		// The BROWSEINFO struct tells the shell 
+		// how it should display the dialog.
+		BROWSEINFO bi;
+		memset(&bi, 0, sizeof(bi));
+
+		bi.ulFlags = BIF_USENEWUI;
+		bi.hwndOwner = hOwner;
+		bi.lpszTitle = szCaption;
+
+		// must call this if using BIF_USENEWUI
+		::OleInitialize(NULL);
+
+		// Show the dialog and get the itemIDList for the 
+		// selected folder.
+		LPITEMIDLIST pIDL = ::SHBrowseForFolder(&bi);
+
+		if (pIDL != NULL)
+		{
+			// Create a buffer to store the path, then 
+			// get the path.
+			wchar_t buffer[_MAX_PATH] = { '\0' };
+			if (::SHGetPathFromIDList(pIDL, buffer) != 0)
+			{
+				// Set the string value.
+				folderpath = std::wstring(buffer);
+				retVal = true;
+			}
+
+			// free the item id list
+			CoTaskMemFree(pIDL);
+		}
+
+		::OleUninitialize();
+
+		return retVal;
+	}
+
 	void CaptureDataHandler(HANDLER_CONTEXT* lpHandlerContext, BOOL* lpCancel)
 	{
 
@@ -101,17 +144,16 @@ namespace MusicStudioCX
 		TrackContext* lpTrackCtx = nullptr;
 		UINT32 CaptureFrameIndexAdjusted = 0;
 
-		if (TRUE == TriggerStop) {
+		if (TRUE == m_TriggerStop) {
 			*lpCancel = TRUE;
 			return;
 		}
 
-		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);
+		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(m_hwndMainWindow, GWLP_USERDATA);
 		UINT32 TotalLastFrameCount = (
 			lpHandlerContext->LastFrameCounts[0] + 
 			lpHandlerContext->LastFrameCounts[1] + 
 			lpHandlerContext->LastFrameCounts[2]);
-		printf("adjusted offset = %i\n", mctx->frame_offset - TotalLastFrameCount);
 		TrackContext** trackPtrs = mctx->TrackContextList;
 		if (lpHandlerContext->frameCount < (mctx->max_frames - mctx->frame_offset)) {
 
@@ -164,7 +206,8 @@ namespace MusicStudioCX
 			mmsec = mmsec % 1000;
 			msec = msec % 60;
 			swprintf_s(msg, 256, L"%i min %i sec %i ms %i frm", mmin, msec, mmsec, mframe);
-			SetWindowText(hwndStaticStatus, msg);
+			SetWindowText(m_hwndStaticStatus, msg);
+			mctx->auto_position_timebar = TRUE;
 			RedrawTimeBar();
 		}
 		else {
@@ -208,7 +251,7 @@ namespace MusicStudioCX
 			mctx->frame_offset += nFrames;
 
 			swprintf_s(msg, 256, L"Done.");
-			SetWindowText(hwndStaticStatus, msg);
+			SetWindowText(m_hwndStaticStatus, msg);
 			*lpCancel = TRUE;
 		}
 	}
@@ -231,8 +274,8 @@ namespace MusicStudioCX
 	{
 		wchar_t msg[256];
 		memset(msg, 0, 256 * sizeof(wchar_t));
-		SetWindowText(hwndStaticStatus, msg);
-		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);
+		SetWindowText(m_hwndStaticStatus, msg);
+		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(m_hwndMainWindow, GWLP_USERDATA);
 		mctx->frame_offset = 0;
 		BOOL isCapOk = rta_initialize_device_2(mctx->CaptureDevInfo, AUDCLNT_STREAMFLAGS_EVENTCALLBACK);
 		BOOL isRenOk = rta_initialize_device_2(mctx->RenderDevInfo, 0);
@@ -243,16 +286,11 @@ namespace MusicStudioCX
 				mctx->CaptureDevInfo->WaveFormat.wBitsPerSample,
 				mctx->CaptureDevInfo->WaveFormat.nChannels,
 				sizeof(float));
-			if (g_hCaptureThread) CloseHandle(g_hCaptureThread);
-			g_hCaptureThread = INVALID_HANDLE_VALUE;
-			TriggerStop = FALSE;
-			g_hCaptureThread = CreateThread(nullptr, (SIZE_T)0, CaptureThread, (LPVOID)mctx, 0, nullptr);
-		}
-	}
-
-	void StopRecording()
-	{
-
+			if (m_hCaptureThread) CloseHandle(m_hCaptureThread);
+			m_hCaptureThread = INVALID_HANDLE_VALUE;
+			m_TriggerStop = FALSE;
+			m_hCaptureThread = CreateThread(nullptr, (SIZE_T)0, CaptureThread, (LPVOID)mctx, 0, nullptr);
+		}	
 	}
 
 	void RenderDataHandler(HANDLER_CONTEXT* lpHandlerContext, BOOL* lpCancel)
@@ -260,11 +298,11 @@ namespace MusicStudioCX
 		wchar_t msg[256];
 		FRAME2CHSHORT *RenderingDataBuffer = (FRAME2CHSHORT*)(lpHandlerContext->renBuffer);
 		TrackContext* lpTrackCtx = nullptr;
-		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);	
+		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(m_hwndMainWindow, GWLP_USERDATA);
 		// max number of output channels = 2
 		float fval[2];
 
-		if (TRUE == TriggerStop) {
+		if (TRUE == m_TriggerStop) {
 			*lpCancel = TRUE;
 			return;
 		}
@@ -301,7 +339,8 @@ namespace MusicStudioCX
 			mmsec = mmsec % 1000;
 			msec = msec % 60;
 			swprintf_s(msg, 256, L"%i min %i sec %i ms %i frm", mmin, msec, mmsec, mframe);
-			SetWindowText(hwndStaticStatus, msg);
+			SetWindowText(m_hwndStaticStatus, msg);
+			mctx->auto_position_timebar = TRUE;
 			RedrawTimeBar();
 		}
 		else {
@@ -329,14 +368,14 @@ namespace MusicStudioCX
 			mctx->frame_offset += nFrames;
 
 			swprintf_s(msg, 256, L"Render Data; Done.");
-			SetWindowText(hwndStaticStatus, msg);
+			SetWindowText(m_hwndStaticStatus, msg);
 			*lpCancel = TRUE;
 		}
 	}
 
 	DWORD RenderThread(LPVOID lpThreadParameter)
 	{
-		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);
+		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(m_hwndMainWindow, GWLP_USERDATA);
 		LPRTA_DEVICE_INFO devInfo = (LPRTA_DEVICE_INFO)lpThreadParameter;
 		rta_render_frames_rtwq(devInfo, RenderDataHandler);
 		return 0;
@@ -346,26 +385,21 @@ namespace MusicStudioCX
 	{
 		wchar_t msg[256];
 		memset(msg, 0, 256 * sizeof(wchar_t));
-		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);
+		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(m_hwndMainWindow, GWLP_USERDATA);
 		swprintf_s(msg, 256, L"%i sps %i bps %i ch %zi szflt",
 			mctx->RenderDevInfo->WaveFormat.nSamplesPerSec,
 			mctx->RenderDevInfo->WaveFormat.wBitsPerSample,
 			mctx->RenderDevInfo->WaveFormat.nChannels,
 			sizeof(float));
-		SetWindowText(hwndStaticStatus, msg);
+		SetWindowText(m_hwndStaticStatus, msg);
 		mctx->frame_offset = 0;
 		if (TRUE == rta_initialize_device_2(mctx->RenderDevInfo, AUDCLNT_STREAMFLAGS_EVENTCALLBACK))
 		{
-			if (g_hRenderThread) CloseHandle(g_hRenderThread);
-			g_hRenderThread = INVALID_HANDLE_VALUE;
-			TriggerStop = FALSE;
-			g_hRenderThread = CreateThread(nullptr, (SIZE_T)0, RenderThread, (LPVOID)mctx->RenderDevInfo, 0, nullptr);
+			if (m_hRenderThread) CloseHandle(m_hRenderThread);
+			m_hRenderThread = INVALID_HANDLE_VALUE;
+			m_TriggerStop = FALSE;
+			m_hRenderThread = CreateThread(nullptr, (SIZE_T)0, RenderThread, (LPVOID)mctx->RenderDevInfo, 0, nullptr);
 		}
-	}
-
-	void StopPlayback()
-	{
-
 	}
 
 	void PopulateDeviceDropdown(EDataFlow dataFlow, HWND hDlg)
@@ -377,12 +411,12 @@ namespace MusicStudioCX
 		if (dataFlow == EDataFlow::eCapture) {
 			cwnd = GetDlgItem(hDlg, IDC_CMBINPUTIFX);
 			if (!cwnd) return;
-			lpDevices = lpCaptureDevices;
+			lpDevices = m_lpCaptureDevices;
 		}
 		else {
 			cwnd = GetDlgItem(hDlg, IDC_CMBOUTPUTIFX);
 			if (!cwnd) return;
-			lpDevices = lpRenderDevices;
+			lpDevices = m_lpRenderDevices;
 		}
 
 		if (lpDevices != nullptr) {
@@ -416,7 +450,7 @@ namespace MusicStudioCX
 		case WM_COMMAND:
 			if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
 			{
-				MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);
+				MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(m_hwndMainWindow, GWLP_USERDATA);
 
 				cwnd = GetDlgItem(hDlg, IDC_CMBINPUTIFX);
 				lr = SendMessage(cwnd, CB_GETCURSEL, 0, 0);
@@ -459,13 +493,13 @@ namespace MusicStudioCX
 	void RedrawTimeBar()
 	{
 		RECT cr;
-		GetClientRect(hwndMainWindow, &cr);
+		GetClientRect(m_hwndMainWindow, &cr);
 		RECT r = { 0 };
 		r.left = WVFRM_OFFSET;
 		r.top = 32;
 		r.right = cr.right;
 		r.bottom = 64;
-		InvalidateRect(hwndMainWindow, &r, FALSE);
+		InvalidateRect(m_hwndMainWindow, &r, FALSE);
 	}
 
 	void DrawTimeBar(HWND hwnd, HDC hdc, MainWindowContext* mctx)
@@ -605,6 +639,20 @@ namespace MusicStudioCX
 		SelectObject(hdc, oldPen);
 		DeleteObject(WhitePen);
 
+		// if we're past the end of the window
+		// adjust the scoll pos and redraw tracks
+		if (TRUE == mctx->auto_position_timebar) {
+			if (mctx->frame_offset < StartFrame || mctx->frame_offset > EndFrame)
+			{
+				mctx->hscroll_pos = MulDiv(mctx->frame_offset, 65535, mctx->max_frames);
+				SetScrollPos(m_hwndMainWindow, SB_HORZ, mctx->hscroll_pos, TRUE);
+				for (UINT32 TrackIndex = mctx->vscroll_pos; TrackIndex < NUM_TRACKS; TrackIndex++) {
+					if (mctx->TrackContextList[TrackIndex] != nullptr) {
+						InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
+					}
+				}
+			}
+		}
 	}
 
 	BOOL WriteABlockOfFrames(FRAME2CHSHORT* PointerToFrames, UINT32 FramesToWrite, HANDLE hFile)
@@ -635,23 +683,29 @@ namespace MusicStudioCX
 		return TRUE;
 	}
 
-	DWORD WINAPI SaveOnThread(LPVOID lpParm)
+	// assumes 2 channel 16 bit
+	void WriteWaveFile(LPCWSTR WaveFileName, UINT32 RecordingTimeSeconds, UINT32 SamplesPerSec, 
+		TrackContext** lppTca, int TrackId = -1)
 	{
-		DWORD nbw = 0;
-		MainWindowContext* mctx = (MainWindowContext*)lpParm;
 
-		HANDLE hFile = CreateFile(mctx->WavFileName, GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+		wprintf(L"writing %s\n", WaveFileName);
+
+		DWORD nbw = 0;
+		UINT32 SampleSize = sizeof(short);
+		UINT32 NumberOfChannels = 2;
+
+		HANDLE hFile = CreateFile(WaveFileName, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
 
 		if (hFile != nullptr) {
 
-			SetWindowText(hwndStaticStatus, L"Saving...");
+			SetWindowText(m_hwndStaticStatus, L"Saving...");
 
 			// write a wav file
 			UINT32 DataSize =
-				REC_TIME_SECONDS *	// secs of rec time
-				SAMPLES_PER_SEC *	// samples per sec
-				sizeof(short)		// size of a single sample
-				* 2;				// channels
+				RecordingTimeSeconds *	// secs of rec time
+				SamplesPerSec *			// samples per sec
+				SampleSize *			// size of a single sample
+				NumberOfChannels;		// channels
 
 			WriteFile(hFile, "RIFF", 4, &nbw, nullptr);
 
@@ -675,24 +729,24 @@ namespace MusicStudioCX
 			UINT16 val16 = 1;
 			WriteFile(hFile, &val16, sizeof(UINT16), &nbw, nullptr);
 
-			// channels 1 - for now
-			val16 = 2;
+			// channels
+			val16 = NumberOfChannels;
 			WriteFile(hFile, &val16, sizeof(UINT16), &nbw, nullptr);
 
 			// sample rate
-			val32 = SAMPLES_PER_SEC;
+			val32 = SamplesPerSec;
 			WriteFile(hFile, &val32, sizeof(UINT32), &nbw, nullptr);
 
 			// byte rate
-			val32 = SAMPLES_PER_SEC * sizeof(short) * 2 /* channels */;
+			val32 = SamplesPerSec * SampleSize * NumberOfChannels;
 			WriteFile(hFile, &val32, sizeof(UINT32), &nbw, nullptr);
 
 			// block align = channels * bits per sample / 8
-			val16 = sizeof(short) * 2 /* channels */;
+			val16 = SampleSize * NumberOfChannels;
 			WriteFile(hFile, &val16, sizeof(UINT16), &nbw, nullptr);
 
 			// bits per sample
-			val16 = BITS_PER_SAMPLE;
+			val16 = SampleSize * 8;
 			WriteFile(hFile, &val16, sizeof(UINT16), &nbw, nullptr);
 
 			// sub chunk id
@@ -701,22 +755,29 @@ namespace MusicStudioCX
 			// data size
 			WriteFile(hFile, &DataSize, sizeof(UINT32), &nbw, nullptr);
 
-			// write one of the buffers 
-			//BOOL result = WriteFile(hFile, (void*)(mctx->TrackContextList[0]->monobuffershort),
-			//DataSize, &nbw, nullptr);
-
 			float fval[2];
-			FRAME2CHSHORT* FramesToWrite = (FRAME2CHSHORT*)malloc(SAMPLES_PER_SEC * sizeof(FRAME2CHSHORT));
+			FRAME2CHSHORT* FramesToWrite = (FRAME2CHSHORT*)malloc(SamplesPerSec * sizeof(FRAME2CHSHORT));
 			UINT32 FrameCounter = 0;
 			TrackContext* lpTrackCtx = nullptr;
-			for (UINT32 FrameIndex = 0; FrameIndex < mctx->max_frames; FrameIndex++) {
+			for (UINT32 FrameIndex = 0; FrameIndex < SamplesPerSec * RecordingTimeSeconds; FrameIndex++) {
 				memset(fval, 0, sizeof(float) * 2);
-				for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
-					lpTrackCtx = mctx->TrackContextList[TrackIndex];
+				if (TrackId > -1) {
+					lpTrackCtx = lppTca[TrackId];
 					if (lpTrackCtx != nullptr) {
 						if (FALSE == MusicStudioCX::TrackIsMute(lpTrackCtx->state)) {
 							fval[0] += (float)lpTrackCtx->monobuffershort[FrameIndex] * lpTrackCtx->volume * lpTrackCtx->leftpan;
 							fval[1] += (float)lpTrackCtx->monobuffershort[FrameIndex] * lpTrackCtx->volume * lpTrackCtx->rightpan;
+						}
+					}
+				}
+				else {
+					for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
+						lpTrackCtx = lppTca[TrackIndex];
+						if (lpTrackCtx != nullptr) {
+							if (FALSE == MusicStudioCX::TrackIsMute(lpTrackCtx->state)) {
+								fval[0] += (float)lpTrackCtx->monobuffershort[FrameIndex] * lpTrackCtx->volume * lpTrackCtx->leftpan;
+								fval[1] += (float)lpTrackCtx->monobuffershort[FrameIndex] * lpTrackCtx->volume * lpTrackCtx->rightpan;
+							}
 						}
 					}
 				}
@@ -728,17 +789,17 @@ namespace MusicStudioCX
 				FramesToWrite[FrameCounter].channel[1] = (short)fval[1];
 
 				FrameCounter++;
-				if (FrameCounter == SAMPLES_PER_SEC) {
+				if (FrameCounter == SamplesPerSec) {
 					if (FALSE == WriteABlockOfFrames(FramesToWrite, FrameCounter, hFile))
 						goto done;
 					FrameCounter = 0;
-					SendMessage(hwndProgBar, PBM_SETPOS, MulDiv(FrameIndex, 100, mctx->max_frames), 0);
+					SendMessage(m_hwndProgBar, PBM_SETPOS, MulDiv(FrameIndex, 100, SamplesPerSec * RecordingTimeSeconds), 0);
 				}
 			}
 
 		done:
-			SendMessage(hwndProgBar, PBM_SETPOS, 0, 0);
-			SetWindowText(hwndStaticStatus, L"Ready");
+			SendMessage(m_hwndProgBar, PBM_SETPOS, 0, 0);
+			SetWindowText(m_hwndStaticStatus, L"Ready");
 
 			// write any remaining frames
 			if (FrameCounter > 0) WriteABlockOfFrames(FramesToWrite, FrameCounter, hFile);
@@ -749,6 +810,99 @@ namespace MusicStudioCX
 			// close file
 			CloseHandle(hFile);
 		}
+
+	}
+
+	DWORD WINAPI SaveProjectOnThread(LPVOID lpParm) {
+
+		char foo[MAX_PATH];
+		size_t ncv = 0;
+
+		MainWindowContext* mctx = (MainWindowContext*)lpParm;
+
+		rapidjson::StringBuffer buffer;
+		rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(buffer);
+
+		writer.StartObject();
+		writer.String("rec_time_seconds");
+		writer.Int(mctx->rec_time_seconds);
+		writer.String("zoom_mult");
+		writer.Int(mctx->zoom_mult);
+		writer.String("frame_offset");
+		writer.Int(mctx->frame_offset);
+		writer.String("max_frames");
+		writer.Int(mctx->max_frames);
+		writer.String("hscroll_pos");
+		writer.Int(mctx->hscroll_pos);
+		writer.String("vscroll_pos");
+		writer.Int(mctx->vscroll_pos);
+		writer.String("auto_position_timebar");
+		writer.Bool(mctx->auto_position_timebar);
+
+		writer.String("TrackContextList");
+		writer.StartArray();
+		for (int t = 0; t < 16; t++) {
+			writer.StartObject();
+			TrackContext* tctx = mctx->TrackContextList[t];
+			writer.String("InputChannelIndex");
+			writer.Int(tctx->InputChannelIndex);
+			writer.String("leftpan");
+			writer.Double(tctx->leftpan);
+			writer.String("rightpan");
+			writer.Double(tctx->rightpan);
+			writer.String("volume");
+			writer.Double(tctx->volume);
+			writer.String("state");
+			writer.Int(tctx->state);
+			writer.String("IsMinimized");
+			writer.Bool(tctx->IsMinimized);
+			writer.String("TrackIndex");
+			writer.Int(tctx->TrackIndex);
+			writer.EndObject();
+		}
+		writer.EndArray();
+
+		memset(foo, 0, MAX_PATH);
+		wcstombs_s(&ncv, foo, MAX_PATH, mctx->WavFileName, wcslen(mctx->WavFileName));
+		writer.String("WavFileName");
+		writer.String(foo);
+		
+		memset(foo, 0, MAX_PATH);
+		wcstombs_s(&ncv, foo, MAX_PATH, mctx->ProjectDir.c_str(), mctx->ProjectDir.length());
+		writer.String("ProjectDir");
+		writer.String(foo);
+
+		writer.EndObject();
+
+
+		std::wstring PropFileName(mctx->ProjectDir);
+		PropFileName.append(L"\\properties.json");
+		std::ofstream pout(PropFileName);
+		pout << buffer.GetString() << std::endl;
+		pout.flush();
+		pout.close();
+
+		LPCWSTR TrackFileNames[16] = {
+			L"\\track01.wav",L"\\track02.wav",L"\\track03.wav",L"\\track04.wav",
+			L"\\track05.wav",L"\\track06.wav",L"\\track07.wav",L"\\track08.wav",
+			L"\\track09.wav",L"\\track10.wav",L"\\track11.wav",L"\\track12.wav",
+			L"\\track13.wav",L"\\track14.wav",L"\\track15.wav",L"\\track16.wav",
+		};
+
+		for (int t = 0; t < 16; t++) {
+			std::wstring WaveFileName(mctx->ProjectDir);
+			WaveFileName.append(TrackFileNames[t]);
+			WriteWaveFile(WaveFileName.c_str(), mctx->rec_time_seconds, SAMPLES_PER_SEC, mctx->TrackContextList, t);
+		}
+
+		return 0;
+	}
+
+	DWORD WINAPI SaveOnThread(LPVOID lpParm)
+	{
+		MainWindowContext* mctx = (MainWindowContext*)lpParm;
+
+		WriteWaveFile(mctx->WavFileName, REC_TIME_SECONDS, SAMPLES_PER_SEC, mctx->TrackContextList);
 
 		return 0;
 	}
@@ -816,6 +970,7 @@ namespace MusicStudioCX
 						InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
 					}
 				}
+				mctx->auto_position_timebar = FALSE;
 				RedrawTimeBar();
 				break;
 			case BTN_ZOOM_OUT:
@@ -825,6 +980,7 @@ namespace MusicStudioCX
 						InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
 					}
 				}
+				mctx->auto_position_timebar = FALSE;
 				RedrawTimeBar();
 				break;
 			case BTN_PLAY:
@@ -834,7 +990,8 @@ namespace MusicStudioCX
 				StartRecording();
 				break;
 			case BTN_STOP:
-				TriggerStop = TRUE;
+				mctx->auto_position_timebar = FALSE;
+				m_TriggerStop = TRUE;
 				break;
 			case IDM_ABOUT:
 				DialogBox(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
@@ -847,6 +1004,24 @@ namespace MusicStudioCX
 				break;
 			case ID_FILE_SAVEAS:
 				SaveFileAs(hWnd);
+				break;
+			case ID_FILE_SETPROJECTDIR:
+				GetFolder(mctx->ProjectDir, L"Set Project Directory", hWnd);
+				break;
+			case ID_FILE_SAVEPROJECT:
+				if (mctx->ProjectDir.length() < 1)
+				{
+					GetFolder(mctx->ProjectDir, L"Set Project Directory", hWnd);
+					if (mctx->ProjectDir.length() < 1) {
+						MessageBox(hWnd, L"You must set a project directory.", L"ERROR", MB_OK);
+					}
+					else {
+						CreateThread(nullptr, 0, SaveProjectOnThread, (LPVOID)mctx, 0, nullptr);
+					}
+				}
+				else {
+					CreateThread(nullptr, 0, SaveProjectOnThread, (LPVOID)mctx, 0, nullptr);
+				}
 				break;
 			default:
 				return DefWindowProc(hWnd, message, wParam, lParam);
@@ -868,17 +1043,17 @@ namespace MusicStudioCX
 			// if this is running, need to gracefully
 			// stop the thread, wait, and close
 			mctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
-			if (g_hCaptureThread) CloseHandle(g_hCaptureThread);
-			if (g_hRenderThread) CloseHandle(g_hRenderThread);
+			if (m_hCaptureThread) CloseHandle(m_hCaptureThread);
+			if (m_hRenderThread) CloseHandle(m_hRenderThread);
 			for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
 				if (mctx->TrackContextList[TrackIndex] != nullptr) {
 					DestroyWindow(mctx->TrackContextList[TrackIndex]->TrackWindow);
 				}
 			}
-			if (lpCaptureDevices) rta_free_device_list(lpCaptureDevices);
-			if (lpRenderDevices) rta_free_device_list(lpRenderDevices);
-			lpCaptureDevices = nullptr;
-			lpRenderDevices = nullptr;
+			if (m_lpCaptureDevices) rta_free_device_list(m_lpCaptureDevices);
+			if (m_lpRenderDevices) rta_free_device_list(m_lpRenderDevices);
+			m_lpCaptureDevices = nullptr;
+			m_lpRenderDevices = nullptr;
 			PostQuitMessage(0);
 			break;
 		case WM_VSCROLL:
@@ -927,6 +1102,48 @@ namespace MusicStudioCX
 			mctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
 			switch (LOWORD(wParam))
 			{
+			case SB_LINEUP:
+			case SB_PAGEUP:
+				pos = GetScrollPos(hWnd, SB_HORZ);
+				if (pos > 0) {
+					if ((LOWORD(wParam) == SB_PAGEUP) && (pos > 9)) {
+						pos -= 10;
+					}
+					else {
+						pos--;
+					}
+					SetScrollPos(hWnd, SB_HORZ, pos, TRUE);
+					mctx->hscroll_pos = pos;
+					for (UINT32 TrackIndex = mctx->vscroll_pos; TrackIndex < NUM_TRACKS; TrackIndex++) {
+						if (mctx->TrackContextList[TrackIndex] != nullptr) {
+							InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
+						}
+					}
+					mctx->auto_position_timebar = FALSE;
+					RedrawTimeBar();
+				}
+				break;
+			case SB_LINEDOWN:
+			case SB_PAGEDOWN:
+				pos = GetScrollPos(hWnd, SB_HORZ);
+				if (pos < 65535) {
+					if ((LOWORD(wParam) == SB_PAGEDOWN) && (pos < (65535 - 9))) {
+						pos += 10;
+					}
+					else {
+						pos++;
+					}
+					SetScrollPos(hWnd, SB_HORZ, pos, TRUE);
+					mctx->hscroll_pos = pos;
+					for (UINT32 TrackIndex = mctx->vscroll_pos; TrackIndex < NUM_TRACKS; TrackIndex++) {
+						if (mctx->TrackContextList[TrackIndex] != nullptr) {
+							InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
+						}
+					}
+					mctx->auto_position_timebar = FALSE;
+					RedrawTimeBar();
+				}
+				break;
 			case SB_THUMBTRACK:
 				mctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
 				mctx->hscroll_pos = HIWORD(wParam);
@@ -935,6 +1152,7 @@ namespace MusicStudioCX
 						InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
 					}
 				}
+				mctx->auto_position_timebar = FALSE;
 				RedrawTimeBar();
 				break;
 			case SB_THUMBPOSITION:
@@ -946,6 +1164,7 @@ namespace MusicStudioCX
 						InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
 					}
 				}
+				mctx->auto_position_timebar = FALSE;
 				RedrawTimeBar();
 				break;
 			}
@@ -968,8 +1187,8 @@ namespace MusicStudioCX
 	{
 		WNDCLASSEXW wcex;
 
-		LoadStringW(GetModuleHandle(nullptr), IDC_MUSICSTUDIOCX, szWindowClass, MAX_LOADSTRING);
-		LoadStringW(GetModuleHandle(nullptr), IDS_APP_TITLE, szTitle, MAX_LOADSTRING);
+		LoadStringW(GetModuleHandle(nullptr), IDC_MUSICSTUDIOCX, m_szWindowClass, MAX_LOADSTRING);
+		LoadStringW(GetModuleHandle(nullptr), IDS_APP_TITLE, m_szTitle, MAX_LOADSTRING);
 
 		wcex.cbSize = sizeof(WNDCLASSEX);
 
@@ -982,7 +1201,7 @@ namespace MusicStudioCX
 		wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
 		wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
 		wcex.lpszMenuName = MAKEINTRESOURCEW(IDC_MUSICSTUDIOCX);
-		wcex.lpszClassName = szWindowClass;
+		wcex.lpszClassName = m_szWindowClass;
 		wcex.hIconSm = LoadIcon(wcex.hInstance, MAKEINTRESOURCE(IDI_SMALL));
 
 		RegisterClassExW(&wcex);
@@ -990,49 +1209,48 @@ namespace MusicStudioCX
 
 	HWND create_main_window()
 	{
-		hwndMainWindow = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW | WS_HSCROLL | WS_VSCROLL,
+		m_hwndMainWindow = CreateWindowW(m_szWindowClass, m_szTitle, WS_OVERLAPPEDWINDOW | WS_HSCROLL | WS_VSCROLL,
 			CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
 		//CreateStatusBar(hwndMainWindow);
 
-		CXCommon::CreateButton(hwndMainWindow, 0, 0, 64, 32, L"ZIN", BTN_ZOOM_IN);
-		CXCommon::CreateButton(hwndMainWindow, 64, 0, 64, 32, L"ZOUT", BTN_ZOOM_OUT);
-		CXCommon::CreateButton(hwndMainWindow, 128, 0, 64, 32, L"PLAY", BTN_PLAY);
-		CXCommon::CreateButton(hwndMainWindow, 192, 0, 64, 32, L"RECD", BTN_REC);
-		CXCommon::CreateButton(hwndMainWindow, 256, 0, 64, 32, L"STOP", BTN_STOP);
+		CXCommon::CreateButton(m_hwndMainWindow, 0, 0, 64, 32, L"ZIN", BTN_ZOOM_IN);
+		CXCommon::CreateButton(m_hwndMainWindow, 64, 0, 64, 32, L"ZOUT", BTN_ZOOM_OUT);
+		CXCommon::CreateButton(m_hwndMainWindow, 128, 0, 64, 32, L"PLAY", BTN_PLAY);
+		CXCommon::CreateButton(m_hwndMainWindow, 192, 0, 64, 32, L"RECD", BTN_REC);
+		CXCommon::CreateButton(m_hwndMainWindow, 256, 0, 64, 32, L"STOP", BTN_STOP);
 
 		// create progress bar here
-		hwndProgBar = CreateWindowEx(0, L"msctls_progress32", nullptr, WS_CHILD | WS_VISIBLE, 324, 8, 200, 16,
-			hwndMainWindow, (HMENU)ID_SB_PROGRESS_BAR, GetModuleHandle(nullptr), nullptr);
-		SendMessage(hwndProgBar, PBM_SETSTEP, (WPARAM)1, 0);
-		SendMessage(hwndProgBar, PBM_SETRANGE, 0, MAKELONG(0,100));
+		m_hwndProgBar = CreateWindowEx(0, L"msctls_progress32", nullptr, WS_CHILD | WS_VISIBLE, 324, 8, 200, 16,
+			m_hwndMainWindow, (HMENU)ID_SB_PROGRESS_BAR, GetModuleHandle(nullptr), nullptr);
+		SendMessage(m_hwndProgBar, PBM_SETSTEP, (WPARAM)1, 0);
+		SendMessage(m_hwndProgBar, PBM_SETRANGE, 0, MAKELONG(0,100));
 
 		// create label here
-		hwndStaticStatus = CreateWindow(L"STATIC", nullptr, WS_CHILD | WS_VISIBLE, 528, 8, 200, 16,
-			hwndMainWindow, (HMENU)ID_STATIC_STATUS, GetModuleHandle(nullptr), nullptr);
-		SetWindowText(hwndStaticStatus, L"Ready");
+		m_hwndStaticStatus = CreateWindow(L"STATIC", nullptr, WS_CHILD | WS_VISIBLE, 528, 8, 200, 16,
+			m_hwndMainWindow, (HMENU)ID_STATIC_STATUS, GetModuleHandle(nullptr), nullptr);
+		SetWindowText(m_hwndStaticStatus, L"Ready");
 
 		// set scroll bar info
-		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);
+		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(m_hwndMainWindow, GWLP_USERDATA);
 		SCROLLINFO si;
 		si.cbSize = sizeof(SCROLLINFO);
 		si.nMin = 0;
 		si.nMax = 65535;
 		si.nPos = 0;
-		si.fMask = SIF_RANGE | SIF_POS;
-		SetScrollInfo(hwndMainWindow, SB_HORZ, &si, TRUE);
+		si.nPage = 1;
+		si.fMask = SIF_RANGE | SIF_POS | SIF_PAGE;
+		SetScrollInfo(m_hwndMainWindow, SB_HORZ, &si, TRUE);
 
 		si.nMax = 15;
-		si.nPage = 1;
-		si.fMask |= SIF_PAGE;
-		SetScrollInfo(hwndMainWindow, SB_VERT, &si, TRUE);
+		SetScrollInfo(m_hwndMainWindow, SB_VERT, &si, TRUE);
 
-		rta_list_supporting_devices_2(&lpCaptureDevices, &StandardFormatInDefault, DEVICE_STATE_ACTIVE, 
+		rta_list_supporting_devices_2(&m_lpCaptureDevices, &m_StandardFormatInDefault, DEVICE_STATE_ACTIVE,
 			eCapture, AUDCLNT_SHAREMODE_EXCLUSIVE, TRUE);
-		mctx->CaptureDevInfo = lpCaptureDevices;
+		mctx->CaptureDevInfo = m_lpCaptureDevices;
 
-		rta_list_supporting_devices_2(&lpRenderDevices, &StandardFormatOutDefault, DEVICE_STATE_ACTIVE, 
+		rta_list_supporting_devices_2(&m_lpRenderDevices, &m_StandardFormatOutDefault, DEVICE_STATE_ACTIVE,
 			eRender, AUDCLNT_SHAREMODE_EXCLUSIVE, FALSE);
-		mctx->RenderDevInfo = lpRenderDevices;
+		mctx->RenderDevInfo = m_lpRenderDevices;
 
 		wchar_t TrackName[] = L"Track##";
 		wchar_t digit = '0';
@@ -1046,7 +1264,7 @@ namespace MusicStudioCX
 				TrackName[5] = '1';
 				TrackName[6] = digit + (TrackIndex - 9);
 			}
-			TrackContext* ctx = MusicStudioCX::create_track_window_a(hwndMainWindow, TrackName, 0);
+			TrackContext* ctx = MusicStudioCX::create_track_window_a(m_hwndMainWindow, TrackName, 0);
 			ctx->TrackIndex = TrackIndex;
 			if (prevContext != nullptr) {
 				prevContext->NextTrackWindow = ctx->TrackWindow;
@@ -1061,7 +1279,7 @@ namespace MusicStudioCX
 		//ctx = MusicStudioCX::create_track_window_a(hwndMainWindow, L"Track2", 1);
 		//generate_sine(329.628f, mctx->rec_time_seconds, ctx->monobuffershort, 0.5f);
 
-		return hwndMainWindow;
+		return m_hwndMainWindow;
 	}
 
 	void reposition_all_tracks(MainWindowContext* mctx)
