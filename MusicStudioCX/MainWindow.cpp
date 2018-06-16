@@ -6,6 +6,8 @@
 #define BTN_REC 30002
 #define BTN_PLAY 30003
 #define BTN_STOP 30004
+#define ID_SB_PROGRESS_BAR 30005
+#define ID_STATIC_STATUS 30006
 
 namespace MusicStudioCX
 {
@@ -19,7 +21,8 @@ namespace MusicStudioCX
 	LPCWSTR STATUS_READY = L"Ready";
 
 	HWND hwndMainWindow = nullptr;
-	HWND hwndStatus = nullptr;
+	HWND hwndStaticStatus = nullptr;
+	HWND hwndProgBar = nullptr;
 
 	BOOL TriggerStop = FALSE;
 
@@ -45,6 +48,7 @@ namespace MusicStudioCX
 
 	void RedrawTimeBar();
 
+	/*
 	void CreateStatusBar(HWND hwndParent)
 	{
 		InitCommonControls();
@@ -64,7 +68,26 @@ namespace MusicStudioCX
 		int PartRight = -1;
 		SendMessage(hwndStatus, SB_SETPARTS, (WPARAM)1, (LPARAM)&PartRight);
 		SendMessage(hwndStatus, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)STATUS_READY);
+		SetWindowPos(hwndStatus, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+
+		
+		int iBarWidths[] = { 120, 285, -1 };
+		//static HWND StatusBar, hProgressBar;
+
+		// Creating a Status Bar 
+		//hStatusBar = CreateWindowEx(NULL, STATUSCLASSNAME, NULL, WS_CHILD | WS_VISIBLE, 0, 0, 0, 0,
+		//	hwnd, (HMENU)IDD_STATUSBAR, hInst, NULL);
+		SendMessage(hwndStatus, SB_SETPARTS, 3, (LPARAM)iBarWidths);
+		SendMessage(hwndStatus, SB_SETTEXT, 0, (LPARAM)STATUS_READY);
+		//SendMessage(hStatusBar, SB_SETTEXT, 2, (LPARAM) "some text 2");
+
+		// Creating and place the  Progress Bar inside the StatusBar 
+		HWND hpb = CreateWindowEx(NULL, L"msctls_progress32", NULL, WS_CHILD | WS_VISIBLE, 122, 2, 163, 18,
+			hwndStatus, (HMENU)ID_SB_PROGRESS_BAR, GetModuleHandle(nullptr), NULL);
+		SendMessage(hpb, PBM_SETSTEP, (WPARAM)1, 0);
+		
 	}
+	*/
 
 	void CaptureDataHandler(HANDLER_CONTEXT* lpHandlerContext, BOOL* lpCancel)
 	{
@@ -134,12 +157,14 @@ namespace MusicStudioCX
 			mctx->frame_offset += lpHandlerContext->frameCount;
 
 			memset(msg, 0, 256 * sizeof(wchar_t));
-			UINT32 mframe = mctx->frame_offset % 48000;
-			UINT32 msec = mctx->frame_offset / 48000;
+			UINT32 mframe = mctx->frame_offset % 48;
+			UINT32 mmsec = mctx->frame_offset / 48;
+			UINT32 msec = mmsec / 1000;
 			UINT32 mmin = msec / 60;
+			mmsec = mmsec % 1000;
 			msec = msec % 60;
-			swprintf_s(msg, 256, L"%i min %i sec %i frm", mmin, msec, mframe);
-			SendMessage(hwndStatus, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
+			swprintf_s(msg, 256, L"%i min %i sec %i ms %i frm", mmin, msec, mmsec, mframe);
+			SetWindowText(hwndStaticStatus, msg);
 			RedrawTimeBar();
 		}
 		else {
@@ -183,7 +208,7 @@ namespace MusicStudioCX
 			mctx->frame_offset += nFrames;
 
 			swprintf_s(msg, 256, L"Done.");
-			SendMessage(hwndStatus, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
+			SetWindowText(hwndStaticStatus, msg);
 			*lpCancel = TRUE;
 		}
 	}
@@ -206,7 +231,7 @@ namespace MusicStudioCX
 	{
 		wchar_t msg[256];
 		memset(msg, 0, 256 * sizeof(wchar_t));
-		SendMessage(hwndStatus, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
+		SetWindowText(hwndStaticStatus, msg);
 		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);
 		mctx->frame_offset = 0;
 		BOOL isCapOk = rta_initialize_device_2(mctx->CaptureDevInfo, AUDCLNT_STREAMFLAGS_EVENTCALLBACK);
@@ -269,12 +294,14 @@ namespace MusicStudioCX
 			mctx->frame_offset += lpHandlerContext->frameCount;
 
 			memset(msg, 0, 256 * sizeof(wchar_t));
-			UINT32 mframe = mctx->frame_offset % 48000;
-			UINT32 msec = mctx->frame_offset / 48000;
+			UINT32 mframe = mctx->frame_offset % 48;
+			UINT32 mmsec = mctx->frame_offset / 48;
+			UINT32 msec = mmsec / 1000;
 			UINT32 mmin = msec / 60;
+			mmsec = mmsec % 1000;
 			msec = msec % 60;
-			swprintf_s(msg, 256, L"%i min %i sec %i frm", mmin, msec, mframe);
-			SendMessage(hwndStatus, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
+			swprintf_s(msg, 256, L"%i min %i sec %i ms %i frm", mmin, msec, mmsec, mframe);
+			SetWindowText(hwndStaticStatus, msg);
 			RedrawTimeBar();
 		}
 		else {
@@ -302,7 +329,7 @@ namespace MusicStudioCX
 			mctx->frame_offset += nFrames;
 
 			swprintf_s(msg, 256, L"Render Data; Done.");
-			SendMessage(hwndStatus, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
+			SetWindowText(hwndStaticStatus, msg);
 			*lpCancel = TRUE;
 		}
 	}
@@ -325,7 +352,7 @@ namespace MusicStudioCX
 			mctx->RenderDevInfo->WaveFormat.wBitsPerSample,
 			mctx->RenderDevInfo->WaveFormat.nChannels,
 			sizeof(float));
-		SendMessage(hwndStatus, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
+		SetWindowText(hwndStaticStatus, msg);
 		mctx->frame_offset = 0;
 		if (TRUE == rta_initialize_device_2(mctx->RenderDevInfo, AUDCLNT_STREAMFLAGS_EVENTCALLBACK))
 		{
@@ -608,9 +635,125 @@ namespace MusicStudioCX
 		return TRUE;
 	}
 
-	void SaveFileAs(HWND hwnd) {
-
+	DWORD WINAPI SaveOnThread(LPVOID lpParm)
+	{
 		DWORD nbw = 0;
+		MainWindowContext* mctx = (MainWindowContext*)lpParm;
+
+		HANDLE hFile = CreateFile(mctx->WavFileName, GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
+
+		if (hFile != nullptr) {
+
+			SetWindowText(hwndStaticStatus, L"Saving...");
+
+			// write a wav file
+			UINT32 DataSize =
+				REC_TIME_SECONDS *	// secs of rec time
+				SAMPLES_PER_SEC *	// samples per sec
+				sizeof(short)		// size of a single sample
+				* 2;				// channels
+
+			WriteFile(hFile, "RIFF", 4, &nbw, nullptr);
+
+			// chunk size
+			// 36 + subchunk2size
+			// subchunk2size = samples * channels * bitspersample / 8
+			UINT32 val32 = 36 + DataSize;
+			WriteFile(hFile, &val32, sizeof(UINT32), &nbw, nullptr);
+
+			// format
+			WriteFile(hFile, "WAVE", 4, &nbw, nullptr);
+
+			// sub chunk id
+			WriteFile(hFile, "fmt ", 4, &nbw, nullptr);
+
+			// sub chunk size
+			val32 = 16;
+			WriteFile(hFile, &val32, sizeof(UINT32), &nbw, nullptr);
+
+			// audio format = 1
+			UINT16 val16 = 1;
+			WriteFile(hFile, &val16, sizeof(UINT16), &nbw, nullptr);
+
+			// channels 1 - for now
+			val16 = 2;
+			WriteFile(hFile, &val16, sizeof(UINT16), &nbw, nullptr);
+
+			// sample rate
+			val32 = SAMPLES_PER_SEC;
+			WriteFile(hFile, &val32, sizeof(UINT32), &nbw, nullptr);
+
+			// byte rate
+			val32 = SAMPLES_PER_SEC * sizeof(short) * 2 /* channels */;
+			WriteFile(hFile, &val32, sizeof(UINT32), &nbw, nullptr);
+
+			// block align = channels * bits per sample / 8
+			val16 = sizeof(short) * 2 /* channels */;
+			WriteFile(hFile, &val16, sizeof(UINT16), &nbw, nullptr);
+
+			// bits per sample
+			val16 = BITS_PER_SAMPLE;
+			WriteFile(hFile, &val16, sizeof(UINT16), &nbw, nullptr);
+
+			// sub chunk id
+			WriteFile(hFile, "data", 4, &nbw, nullptr);
+
+			// data size
+			WriteFile(hFile, &DataSize, sizeof(UINT32), &nbw, nullptr);
+
+			// write one of the buffers 
+			//BOOL result = WriteFile(hFile, (void*)(mctx->TrackContextList[0]->monobuffershort),
+			//DataSize, &nbw, nullptr);
+
+			float fval[2];
+			FRAME2CHSHORT* FramesToWrite = (FRAME2CHSHORT*)malloc(SAMPLES_PER_SEC * sizeof(FRAME2CHSHORT));
+			UINT32 FrameCounter = 0;
+			TrackContext* lpTrackCtx = nullptr;
+			for (UINT32 FrameIndex = 0; FrameIndex < mctx->max_frames; FrameIndex++) {
+				memset(fval, 0, sizeof(float) * 2);
+				for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
+					lpTrackCtx = mctx->TrackContextList[TrackIndex];
+					if (lpTrackCtx != nullptr) {
+						if (FALSE == MusicStudioCX::TrackIsMute(lpTrackCtx->state)) {
+							fval[0] += (float)lpTrackCtx->monobuffershort[FrameIndex] * lpTrackCtx->volume * lpTrackCtx->leftpan;
+							fval[1] += (float)lpTrackCtx->monobuffershort[FrameIndex] * lpTrackCtx->volume * lpTrackCtx->rightpan;
+						}
+					}
+				}
+				if (fval[0] > 32767.0f) fval[0] = 32767.0f;
+				if (fval[0] < -32767.0f) fval[0] = -32767.0f;
+				FramesToWrite[FrameCounter].channel[0] = (short)fval[0];
+				if (fval[1] > 32767.0f) fval[1] = 32767.0f;
+				if (fval[1] < -32767.0f) fval[1] = -32767.0f;
+				FramesToWrite[FrameCounter].channel[1] = (short)fval[1];
+
+				FrameCounter++;
+				if (FrameCounter == SAMPLES_PER_SEC) {
+					if (FALSE == WriteABlockOfFrames(FramesToWrite, FrameCounter, hFile))
+						goto done;
+					FrameCounter = 0;
+					SendMessage(hwndProgBar, PBM_SETPOS, MulDiv(FrameIndex, 100, mctx->max_frames), 0);
+				}
+			}
+
+		done:
+			SendMessage(hwndProgBar, PBM_SETPOS, 0, 0);
+			SetWindowText(hwndStaticStatus, L"Ready");
+
+			// write any remaining frames
+			if (FrameCounter > 0) WriteABlockOfFrames(FramesToWrite, FrameCounter, hFile);
+
+			// free frame buffer
+			if (FramesToWrite) free(FramesToWrite);
+
+			// close file
+			CloseHandle(hFile);
+		}
+
+		return 0;
+	}
+
+	void SaveFileAs(HWND hwnd) {
 
 		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
 		memset(mctx->WavFileName, 0, 1024 * sizeof(wchar_t));
@@ -625,110 +768,7 @@ namespace MusicStudioCX
 		ofn.nMaxFile = 1024;
 
 		if (GetSaveFileName(&ofn)) {
-
-			HANDLE hFile = CreateFile(mctx->WavFileName, GENERIC_WRITE, 0, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr);
-
-			if (hFile != nullptr) {
-
-				// write a wav file
-				UINT32 DataSize = 
-					REC_TIME_SECONDS *	// secs of rec time
-					SAMPLES_PER_SEC *	// samples per sec
-					sizeof(short)		// size of a single sample
-					* 2;				// channels
-
-				WriteFile(hFile, "RIFF", 4, &nbw, nullptr);
-
-				// chunk size
-				// 36 + subchunk2size
-				// subchunk2size = samples * channels * bitspersample / 8
-				UINT32 val32 = 36 + DataSize;
-				WriteFile(hFile, &val32, sizeof(UINT32), &nbw, nullptr);
-
-				// format
-				WriteFile(hFile, "WAVE", 4, &nbw, nullptr);
-
-				// sub chunk id
-				WriteFile(hFile, "fmt ", 4, &nbw, nullptr);
-
-				// sub chunk size
-				val32 = 16;
-				WriteFile(hFile, &val32, sizeof(UINT32), &nbw, nullptr);
-
-				// audio format = 1
-				UINT16 val16 = 1;
-				WriteFile(hFile, &val16, sizeof(UINT16), &nbw, nullptr);
-
-				// channels 1 - for now
-				val16 = 2;
-				WriteFile(hFile, &val16, sizeof(UINT16), &nbw, nullptr);
-
-				// sample rate
-				val32 = SAMPLES_PER_SEC;
-				WriteFile(hFile, &val32, sizeof(UINT32), &nbw, nullptr);
-
-				// byte rate
-				val32 = SAMPLES_PER_SEC * sizeof(short) * 2 /* channels */;
-				WriteFile(hFile, &val32, sizeof(UINT32), &nbw, nullptr);
-
-				// block align = channels * bits per sample / 8
-				val16 = sizeof(short) * 2 /* channels */;
-				WriteFile(hFile, &val16, sizeof(UINT16), &nbw, nullptr);
-
-				// bits per sample
-				val16 = BITS_PER_SAMPLE;
-				WriteFile(hFile, &val16, sizeof(UINT16), &nbw, nullptr);
-
-				// sub chunk id
-				WriteFile(hFile, "data", 4, &nbw, nullptr);
-
-				// data size
-				WriteFile(hFile, &DataSize, sizeof(UINT32), &nbw, nullptr);
-
-				// write one of the buffers 
-				//BOOL result = WriteFile(hFile, (void*)(mctx->TrackContextList[0]->monobuffershort),
-					//DataSize, &nbw, nullptr);
-
-				float fval[2];
-				FRAME2CHSHORT* FramesToWrite = (FRAME2CHSHORT*)malloc(SAMPLES_PER_SEC * sizeof(FRAME2CHSHORT));
-				UINT32 FrameCounter = 0;
-				TrackContext* lpTrackCtx = nullptr;
-				for (UINT32 FrameIndex = 0; FrameIndex < mctx->max_frames; FrameIndex++) {
-					memset(fval, 0, sizeof(float) * 2);
-					for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
-						lpTrackCtx = mctx->TrackContextList[TrackIndex];
-						if (lpTrackCtx != nullptr) {
-							if (FALSE == MusicStudioCX::TrackIsMute(lpTrackCtx->state)) {
-								fval[0] += (float)lpTrackCtx->monobuffershort[FrameIndex] * lpTrackCtx->volume * lpTrackCtx->leftpan;
-								fval[1] += (float)lpTrackCtx->monobuffershort[FrameIndex] * lpTrackCtx->volume * lpTrackCtx->rightpan;
-							}
-						}
-					}
-					if (fval[0] > 32767.0f) fval[0] = 32767.0f;
-					if (fval[0] < -32767.0f) fval[0] = -32767.0f;
-					FramesToWrite[FrameCounter].channel[0] = (short)fval[0];
-					if (fval[1] > 32767.0f) fval[1] = 32767.0f;
-					if (fval[1] < -32767.0f) fval[1] = -32767.0f;
-					FramesToWrite[FrameCounter].channel[1] = (short)fval[1];
-
-					FrameCounter++;
-					if (FrameCounter == SAMPLES_PER_SEC) {
-						if (FALSE == WriteABlockOfFrames(FramesToWrite, FrameCounter, hFile))
-							goto done;
-						FrameCounter = 0;
-					}
-				}
-
-			done:
-				// write any remaining frames
-				if (FrameCounter > 0) WriteABlockOfFrames(FramesToWrite, FrameCounter, hFile);
-
-				// free frame buffer
-				if (FramesToWrite) free(FramesToWrite);
-
-				// close file
-				CloseHandle(hFile);
-			}
+			CreateThread(nullptr, 0, SaveOnThread, (LPVOID)mctx, 0, nullptr);
 		}
 	}
 
@@ -911,7 +951,7 @@ namespace MusicStudioCX
 			}
 			break;
 		case WM_SIZE:
-			SendMessage(hwndStatus, WM_SIZE, wParam, lParam);
+			//SendMessage(hwndStatus, WM_SIZE, wParam, lParam);
 			mctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
 			for (int TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
 				if (mctx->TrackContextList[TrackIndex] != nullptr)
@@ -952,13 +992,24 @@ namespace MusicStudioCX
 	{
 		hwndMainWindow = CreateWindowW(szWindowClass, szTitle, WS_OVERLAPPEDWINDOW | WS_HSCROLL | WS_VSCROLL,
 			CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
-		CreateStatusBar(hwndMainWindow);
+		//CreateStatusBar(hwndMainWindow);
 
 		CXCommon::CreateButton(hwndMainWindow, 0, 0, 64, 32, L"ZIN", BTN_ZOOM_IN);
 		CXCommon::CreateButton(hwndMainWindow, 64, 0, 64, 32, L"ZOUT", BTN_ZOOM_OUT);
 		CXCommon::CreateButton(hwndMainWindow, 128, 0, 64, 32, L"PLAY", BTN_PLAY);
 		CXCommon::CreateButton(hwndMainWindow, 192, 0, 64, 32, L"RECD", BTN_REC);
 		CXCommon::CreateButton(hwndMainWindow, 256, 0, 64, 32, L"STOP", BTN_STOP);
+
+		// create progress bar here
+		hwndProgBar = CreateWindowEx(0, L"msctls_progress32", nullptr, WS_CHILD | WS_VISIBLE, 324, 8, 200, 16,
+			hwndMainWindow, (HMENU)ID_SB_PROGRESS_BAR, GetModuleHandle(nullptr), nullptr);
+		SendMessage(hwndProgBar, PBM_SETSTEP, (WPARAM)1, 0);
+		SendMessage(hwndProgBar, PBM_SETRANGE, 0, MAKELONG(0,100));
+
+		// create label here
+		hwndStaticStatus = CreateWindow(L"STATIC", nullptr, WS_CHILD | WS_VISIBLE, 528, 8, 200, 16,
+			hwndMainWindow, (HMENU)ID_STATIC_STATUS, GetModuleHandle(nullptr), nullptr);
+		SetWindowText(hwndStaticStatus, L"Ready");
 
 		// set scroll bar info
 		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(hwndMainWindow, GWLP_USERDATA);
