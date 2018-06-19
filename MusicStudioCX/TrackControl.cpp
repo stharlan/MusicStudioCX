@@ -225,6 +225,7 @@ namespace MusicStudioCX
 		ctx->rightpan = 1.0f;
 		ctx->volume = 1.0f;
 		ctx->IsMinimized = FALSE;
+		printf("allocating %i bytes for monobuffershort\n", SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
 		ctx->monobuffershort = (short*)malloc(SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
 		memset(ctx->monobuffershort, 0, SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
 		return ctx;

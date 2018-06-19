@@ -718,6 +718,34 @@ namespace MusicStudioCX
 		return TRUE;
 	}
 
+	BOOL WriteABlockOfFrames(FRAME1CHSHORT* PointerToFrames, UINT32 FramesToWrite, HANDLE hFile)
+	{
+		DWORD nbw = 0;
+
+		// write the frames
+		UINT32 DataSizeToWrite = FramesToWrite * sizeof(FRAME1CHSHORT);
+		BOOL result = WriteFile(hFile, (void*)(PointerToFrames),
+			DataSizeToWrite, &nbw, nullptr);
+
+		if (result == FALSE) {
+			DWORD err = GetLastError();
+			if (ERROR_INVALID_USER_BUFFER == err) {
+				MessageBox(nullptr, L"invalid user buffer", L"ERROR", MB_OK);
+				return FALSE;
+			}
+			else {
+				MessageBox(nullptr, L"failed to write", L"ERROR", MB_OK);
+				return FALSE;
+			}
+		}
+		else if (nbw < DataSizeToWrite) {
+			MessageBox(nullptr, L"not all bytes written", L"ERROR", MB_OK);
+			return FALSE;
+		}
+
+		return TRUE;
+	}
+
 	// assumes 2 channel 16 bit
 	void WriteWaveFile(LPCWSTR WaveFileName, UINT32 RecordingTimeSeconds, UINT32 SamplesPerSec, 
 		TrackContext** lppTca, int TrackId = -1)
@@ -728,6 +756,8 @@ namespace MusicStudioCX
 		DWORD nbw = 0;
 		UINT32 SampleSize = sizeof(short);
 		UINT32 NumberOfChannels = 2;
+
+		if (TrackId > -1) NumberOfChannels = 1;
 
 		HANDLE hFile = CreateFile(WaveFileName, GENERIC_WRITE, 0, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr);
 
@@ -790,22 +820,13 @@ namespace MusicStudioCX
 			// data size
 			WriteFile(hFile, &DataSize, sizeof(UINT32), &nbw, nullptr);
 
-			float fval[2];
-			FRAME2CHSHORT* FramesToWrite = (FRAME2CHSHORT*)malloc(SamplesPerSec * sizeof(FRAME2CHSHORT));
-			UINT32 FrameCounter = 0;
-			TrackContext* lpTrackCtx = nullptr;
-			for (UINT32 FrameIndex = 0; FrameIndex < SamplesPerSec * RecordingTimeSeconds; FrameIndex++) {
-				memset(fval, 0, sizeof(float) * 2);
-				if (TrackId > -1) {
-					lpTrackCtx = lppTca[TrackId];
-					if (lpTrackCtx != nullptr) {
-						if (FALSE == MusicStudioCX::TrackIsMute(lpTrackCtx->state)) {
-							fval[0] += (float)lpTrackCtx->monobuffershort[FrameIndex] * lpTrackCtx->volume * lpTrackCtx->leftpan;
-							fval[1] += (float)lpTrackCtx->monobuffershort[FrameIndex] * lpTrackCtx->volume * lpTrackCtx->rightpan;
-						}
-					}
-				}
-				else {
+			if (NumberOfChannels == 2) {
+				float fval[2];
+				FRAME2CHSHORT* FramesToWrite = (FRAME2CHSHORT*)malloc(SamplesPerSec * sizeof(FRAME2CHSHORT));
+				UINT32 FrameCounter = 0;
+				TrackContext* lpTrackCtx = nullptr;
+				for (UINT32 FrameIndex = 0; FrameIndex < SamplesPerSec * RecordingTimeSeconds; FrameIndex++) {
+					memset(fval, 0, sizeof(float) * 2);
 					for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
 						lpTrackCtx = lppTca[TrackIndex];
 						if (lpTrackCtx != nullptr) {
@@ -815,32 +836,52 @@ namespace MusicStudioCX
 							}
 						}
 					}
-				}
-				if (fval[0] > 32767.0f) fval[0] = 32767.0f;
-				if (fval[0] < -32767.0f) fval[0] = -32767.0f;
-				FramesToWrite[FrameCounter].channel[0] = (short)fval[0];
-				if (fval[1] > 32767.0f) fval[1] = 32767.0f;
-				if (fval[1] < -32767.0f) fval[1] = -32767.0f;
-				FramesToWrite[FrameCounter].channel[1] = (short)fval[1];
+					if (fval[0] > 32767.0f) fval[0] = 32767.0f;
+					if (fval[0] < -32767.0f) fval[0] = -32767.0f;
+					FramesToWrite[FrameCounter].channel[0] = (short)fval[0];
+					if (fval[1] > 32767.0f) fval[1] = 32767.0f;
+					if (fval[1] < -32767.0f) fval[1] = -32767.0f;
+					FramesToWrite[FrameCounter].channel[1] = (short)fval[1];
 
-				FrameCounter++;
-				if (FrameCounter == SamplesPerSec) {
-					if (FALSE == WriteABlockOfFrames(FramesToWrite, FrameCounter, hFile))
-						goto done;
-					FrameCounter = 0;
-					SendMessage(m_hwndProgBar, PBM_SETPOS, MulDiv(FrameIndex, 100, SamplesPerSec * RecordingTimeSeconds), 0);
+					FrameCounter++;
+					if (FrameCounter == SamplesPerSec) {
+						if (FALSE == WriteABlockOfFrames(FramesToWrite, FrameCounter, hFile))
+							goto done;
+						FrameCounter = 0;
+						SendMessage(m_hwndProgBar, PBM_SETPOS, MulDiv(FrameIndex, 100, SamplesPerSec * RecordingTimeSeconds), 0);
+					}
 				}
+
+				// write any remaining frames
+				if (FrameCounter > 0) WriteABlockOfFrames(FramesToWrite, FrameCounter, hFile);
+
+				// free frame buffer
+				if (FramesToWrite) free(FramesToWrite);
 			}
+			else {
+				FRAME1CHSHORT* FramesToWrite = (FRAME1CHSHORT*)malloc(SamplesPerSec * sizeof(FRAME1CHSHORT));
+				UINT32 FrameCounter = 0;
+				TrackContext* lpTrackCtx = nullptr;
+				for (UINT32 FrameIndex = 0; FrameIndex < SamplesPerSec * RecordingTimeSeconds; FrameIndex++) {
+					FramesToWrite[FrameCounter] = lppTca[TrackId]->monobuffershort[FrameIndex];
+					FrameCounter++;
+					if (FrameCounter == SamplesPerSec) {
+						if (FALSE == WriteABlockOfFrames(FramesToWrite, FrameCounter, hFile))
+							goto done;
+						FrameCounter = 0;
+						SendMessage(m_hwndProgBar, PBM_SETPOS, MulDiv(FrameIndex, 100, SamplesPerSec * RecordingTimeSeconds), 0);
+					}
+				}
 
+				// write any remaining frames
+				if (FrameCounter > 0) WriteABlockOfFrames(FramesToWrite, FrameCounter, hFile);
+
+				// free frame buffer
+				if (FramesToWrite) free(FramesToWrite);
+			}
 		done:
 			SendMessage(m_hwndProgBar, PBM_SETPOS, 0, 0);
 			SetWindowText(m_hwndStaticStatus, L"Ready");
-
-			// write any remaining frames
-			if (FrameCounter > 0) WriteABlockOfFrames(FramesToWrite, FrameCounter, hFile);
-
-			// free frame buffer
-			if (FramesToWrite) free(FramesToWrite);
 
 			// close file
 			CloseHandle(hFile);
@@ -852,7 +893,8 @@ namespace MusicStudioCX
 
 		MainWindowContext* mctx = (MainWindowContext*)lpParm;
 		UINT32 SampleSize = sizeof(short);
-		UINT32 NumberOfChannels = 2;
+		// these are individual tracks - mono
+		UINT32 NumberOfChannels = 1;
 
 		std::wstring PropFileName(mctx->ProjectDir);
 		PropFileName.append(L"\\properties.json");
@@ -879,7 +921,7 @@ namespace MusicStudioCX
 				mctx->max_frames = d["max_frames"].GetInt();
 				mctx->hscroll_pos = d["hscroll_pos"].GetInt();
 				mctx->vscroll_pos = d["vscroll_pos"].GetInt();
-				mctx->auto_position_timebar = d["auto_position_timebar"].GetInt();
+				mctx->auto_position_timebar = d["auto_position_timebar"].GetBool();
 
 				printf("rec time secs %i\n", mctx->rec_time_seconds);
 				printf("zoom mult %i\n", mctx->zoom_mult);
@@ -936,8 +978,8 @@ namespace MusicStudioCX
 						SetFilePointer(WaveFile, 44, nullptr, FILE_BEGIN);
 						TrackContext* tctx = mctx->TrackContextList[t];
 						printf("reading %i bytes\n", DataSize);
-						BOOL bres = ReadFile(WaveFile, tctx->monobuffershort, DataSize, &nbr, nullptr);
-						// invalid access to the memory location, buffer too small?
+						BOOL bres = ReadFile(WaveFile, (LPVOID)tctx->monobuffershort, 
+							DataSize, &nbr, nullptr);
 						if (bres == FALSE) printf("result is false; %i\n", GetLastError());
 						printf("read %i bytes\n", nbr);
 						if (nbr != DataSize) printf("ERROR: Didn't read all wave bytes\n");
@@ -963,6 +1005,8 @@ namespace MusicStudioCX
 		else {
 			printf("failed to open props file\n");
 		}
+
+		return 0;
 	}
 
 	DWORD WINAPI SaveProjectOnThread(LPVOID lpParm) {
@@ -1050,7 +1094,7 @@ namespace MusicStudioCX
 		return 0;
 	}
 
-	DWORD WINAPI SaveOnThread(LPVOID lpParm)
+	DWORD WINAPI ExportMixdownOnThread(LPVOID lpParm)
 	{
 		MainWindowContext* mctx = (MainWindowContext*)lpParm;
 
@@ -1059,10 +1103,15 @@ namespace MusicStudioCX
 		return 0;
 	}
 
-	void SaveFileAs(HWND hwnd) {
+	void ExportMixdownAs(HWND hwnd) {
 
 		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
 		memset(mctx->WavFileName, 0, 1024 * sizeof(wchar_t));
+
+		wchar_t* initDir = nullptr;
+		if (mctx->ProjectDir.length() > 0) {
+			initDir = _wcsdup(mctx->ProjectDir.c_str());
+		}
 
 		OPENFILENAME ofn;
 		memset(&ofn, 0, sizeof(OPENFILENAME));
@@ -1071,11 +1120,15 @@ namespace MusicStudioCX
 		ofn.hInstance = GetModuleHandle(nullptr);
 		ofn.lpstrFilter = L"*.wav";
 		ofn.lpstrFile = mctx->WavFileName;
+		ofn.lpstrInitialDir = initDir;
 		ofn.nMaxFile = 1024;
 
 		if (GetSaveFileName(&ofn)) {
-			CreateThread(nullptr, 0, SaveOnThread, (LPVOID)mctx, 0, nullptr);
+			CreateThread(nullptr, 0, ExportMixdownOnThread, (LPVOID)mctx, 0, nullptr);
 		}
+
+		if (initDir) free(initDir);
+
 	}
 
 	//
@@ -1154,22 +1207,26 @@ namespace MusicStudioCX
 			case ID_FILE_SETUP:
 				DialogBox(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDD_SETUPDLG), hWnd, SetupDlgProc);
 				break;
-			case ID_FILE_SAVEAS:
-				SaveFileAs(hWnd);
+			case ID_FILE_EXPORTMIXDOWN:
+				ExportMixdownAs(hWnd);
 				break;
 			case ID_FILE_SETPROJECTDIR:
+				// set the project dir
 				GetFolder(mctx->ProjectDir, L"Set Project Directory", hWnd);
 				break;
 			case ID_FILE_NEW:
+				// new project - reset everything
 				StartNewProject();
 				break;
 			case ID_FILE_LOADPROJECT:
+				// load an entire project
 				GetFolder(mctx->ProjectDir, L"Set Project Directory", hWnd);
 				if (mctx->ProjectDir.length() > 0) {
 					CreateThread(nullptr, 0, LoadProjectOnThread, (LPVOID)mctx, 0, nullptr);
 				}
 				break;
 			case ID_FILE_SAVEPROJECT:
+				// save an entire project
 				if (mctx->ProjectDir.length() < 1)
 				{
 					GetFolder(mctx->ProjectDir, L"Set Project Directory", hWnd);

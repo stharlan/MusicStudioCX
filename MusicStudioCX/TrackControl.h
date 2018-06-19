@@ -32,6 +32,8 @@ typedef struct {
 	short channel[2];
 } FRAME2CHSHORT;
 
+typedef short FRAME1CHSHORT;
+
 typedef short SAMPLESHORT;
 
 namespace MusicStudioCX
