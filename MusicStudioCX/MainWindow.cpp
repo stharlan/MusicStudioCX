@@ -89,6 +89,41 @@ namespace MusicStudioCX
 	}
 	*/
 
+	void StartNewProject()
+	{
+		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(m_hwndMainWindow, GWLP_USERDATA);
+
+		mctx->auto_position_timebar = false;
+		mctx->frame_offset = 0;
+		mctx->hscroll_pos = 0;
+		mctx->max_frames = SAMPLES_PER_SEC * REC_TIME_SECONDS;
+		mctx->ProjectDir = std::wstring();
+		mctx->rec_time_seconds = REC_TIME_SECONDS;
+		mctx->vscroll_pos = 0;
+		memset(mctx->WavFileName, 0, 1024 * sizeof(wchar_t));
+		mctx->zoom_mult = 256;
+
+		for (int t = 0; t < 16; t++) {
+			TrackContext* tctx = mctx->TrackContextList[t];
+			tctx->InputChannelIndex = 0;
+			tctx->IsMinimized = FALSE;
+			tctx->leftpan = 1.0f;
+			tctx->rightpan = 1.0f;
+			tctx->state = 0;
+			tctx->volume = 1.0f;
+			memset(tctx->monobuffershort, 0, SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
+		}
+
+		SetScrollPos(m_hwndMainWindow, SB_HORZ, 0, TRUE);
+		SetScrollPos(m_hwndMainWindow, SB_VERT, 0, TRUE);
+		RedrawTimeBar();
+		reposition_all_tracks(mctx);
+		for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
+			InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
+		}
+
+	}
+
 	bool GetFolder(std::wstring& folderpath,
 		const wchar_t* szCaption = NULL,
 		HWND hOwner = NULL)
@@ -598,16 +633,16 @@ namespace MusicStudioCX
 			float time = (float)sec * (float)secMult / (float)secDiv;
 			if (mctx->zoom_mult == 1) {
 				wsprintf(timeval, L"%if", sec * 96);
-				DrawText(hdc, timeval, wcslen(timeval), &tr, DT_TOP | DT_LEFT);
+				DrawText(hdc, timeval, (int)wcslen(timeval), &tr, DT_TOP | DT_LEFT);
 			}
 			else if (secDiv > 1) {
 				time *= 1000;
 				wsprintf(timeval, L"%ims", (int)time);
-				DrawText(hdc, timeval, wcslen(timeval), &tr, DT_TOP | DT_LEFT);
+				DrawText(hdc, timeval, (int)wcslen(timeval), &tr, DT_TOP | DT_LEFT);
 			}
 			else {
 				wsprintf(timeval, L"%is", (int)time);
-				DrawText(hdc, timeval, wcslen(timeval), &tr, DT_TOP | DT_LEFT);
+				DrawText(hdc, timeval, (int)wcslen(timeval), &tr, DT_TOP | DT_LEFT);
 			}
 		}
 
@@ -813,6 +848,123 @@ namespace MusicStudioCX
 
 	}
 
+	DWORD WINAPI LoadProjectOnThread(LPVOID lpParm) {
+
+		MainWindowContext* mctx = (MainWindowContext*)lpParm;
+		UINT32 SampleSize = sizeof(short);
+		UINT32 NumberOfChannels = 2;
+
+		std::wstring PropFileName(mctx->ProjectDir);
+		PropFileName.append(L"\\properties.json");
+
+		wprintf(L"reading %s\n", PropFileName.c_str());
+
+		HANDLE hFile = CreateFile(PropFileName.c_str(), GENERIC_READ, FILE_SHARE_READ,
+			nullptr, OPEN_EXISTING, 0, nullptr);
+		if (hFile) {
+			DWORD fsize = GetFileSize(hFile, nullptr);
+			char* buffer = (char*)malloc(fsize + 1);
+			memset(buffer, 0, fsize + 1);
+			DWORD nbr = 0;
+			ReadFile(hFile, buffer, fsize, &nbr, nullptr);
+			printf("read %i bytes\n", nbr);
+			if (nbr == fsize) {
+
+				rapidjson::Document d;
+				d.Parse(buffer);
+
+				mctx->rec_time_seconds = d["rec_time_seconds"].GetInt();
+				mctx->zoom_mult = d["zoom_mult"].GetInt();
+				mctx->frame_offset = d["frame_offset"].GetInt();
+				mctx->max_frames = d["max_frames"].GetInt();
+				mctx->hscroll_pos = d["hscroll_pos"].GetInt();
+				mctx->vscroll_pos = d["vscroll_pos"].GetInt();
+				mctx->auto_position_timebar = d["auto_position_timebar"].GetInt();
+
+				printf("rec time secs %i\n", mctx->rec_time_seconds);
+				printf("zoom mult %i\n", mctx->zoom_mult);
+				printf("frame offset %i\n", mctx->frame_offset);
+				printf("max_frames %i\n", mctx->max_frames);
+				printf("hs pos %i\n", mctx->hscroll_pos);
+				printf("vs pos %i\n", mctx->vscroll_pos);
+				printf("auto pos tb %i\n", mctx->auto_position_timebar);
+
+				rapidjson::Value::Array trackArray = d["TrackContextList"].GetArray();
+
+				//for (rapidjson::Value::ConstValueIterator i = trackArray.Begin(); i != trackArray.End(); ++i)
+				for(int i=0; i<16; i++)
+				{
+
+					TrackContext* tctx = mctx->TrackContextList[i];
+					tctx->InputChannelIndex = trackArray[i]["InputChannelIndex"].GetInt();
+					tctx->leftpan = (float)trackArray[i]["leftpan"].GetDouble();
+					tctx->rightpan = (float)trackArray[i]["rightpan"].GetDouble();
+					tctx->volume = (float)trackArray[i]["volume"].GetDouble();
+					tctx->state = trackArray[i]["state"].GetInt();
+					tctx->IsMinimized = trackArray[i]["IsMinimized"].GetBool();
+
+					printf("=====\n");
+					printf("track id %i\n", tctx->TrackIndex);
+					printf("in ch %i\n", tctx->InputChannelIndex);
+					printf("leftpan %.1f\n", tctx->leftpan);
+					printf("rightpan %.1f\n", tctx->rightpan);
+					printf("volume %.1f\n", tctx->volume);
+					printf("state %i\n", tctx->state);
+					printf("IsMinimized %i\n", tctx->IsMinimized);
+				}
+
+				LPCWSTR TrackFileNames[16] = {
+					L"\\track01.wav",L"\\track02.wav",L"\\track03.wav",L"\\track04.wav",
+					L"\\track05.wav",L"\\track06.wav",L"\\track07.wav",L"\\track08.wav",
+					L"\\track09.wav",L"\\track10.wav",L"\\track11.wav",L"\\track12.wav",
+					L"\\track13.wav",L"\\track14.wav",L"\\track15.wav",L"\\track16.wav",
+				};
+
+				UINT32 DataSize =
+					REC_TIME_SECONDS *		// secs of rec time
+					SAMPLES_PER_SEC *		// samples per sec
+					SampleSize *			// size of a single sample
+					NumberOfChannels;		// channels
+
+				for (int t = 0; t < 16; t++) {
+					std::wstring WaveFileName(mctx->ProjectDir);
+					WaveFileName.append(TrackFileNames[t]);
+					HANDLE WaveFile = CreateFile(WaveFileName.c_str(), GENERIC_READ, FILE_SHARE_READ,
+						nullptr, OPEN_EXISTING, 0, nullptr);
+					if (WaveFile) {
+						DWORD fsize = GetFileSize(WaveFile, nullptr);
+						SetFilePointer(WaveFile, 44, nullptr, FILE_BEGIN);
+						TrackContext* tctx = mctx->TrackContextList[t];
+						printf("reading %i bytes\n", DataSize);
+						BOOL bres = ReadFile(WaveFile, tctx->monobuffershort, DataSize, &nbr, nullptr);
+						// invalid access to the memory location, buffer too small?
+						if (bres == FALSE) printf("result is false; %i\n", GetLastError());
+						printf("read %i bytes\n", nbr);
+						if (nbr != DataSize) printf("ERROR: Didn't read all wave bytes\n");
+						CloseHandle(WaveFile);
+					}
+				}
+
+				SetScrollPos(m_hwndMainWindow, SB_HORZ, mctx->hscroll_pos, TRUE);
+				SetScrollPos(m_hwndMainWindow, SB_VERT, mctx->vscroll_pos, TRUE);
+				RedrawTimeBar();
+				reposition_all_tracks(mctx);
+				for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
+					InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
+				}
+
+			}
+			else {
+				printf("failed to read file");
+				StartNewProject();
+			}
+			CloseHandle(hFile);
+		}
+		else {
+			printf("failed to open props file\n");
+		}
+	}
+
 	DWORD WINAPI SaveProjectOnThread(LPVOID lpParm) {
 
 		char foo[MAX_PATH];
@@ -1007,6 +1159,15 @@ namespace MusicStudioCX
 				break;
 			case ID_FILE_SETPROJECTDIR:
 				GetFolder(mctx->ProjectDir, L"Set Project Directory", hWnd);
+				break;
+			case ID_FILE_NEW:
+				StartNewProject();
+				break;
+			case ID_FILE_LOADPROJECT:
+				GetFolder(mctx->ProjectDir, L"Set Project Directory", hWnd);
+				if (mctx->ProjectDir.length() > 0) {
+					CreateThread(nullptr, 0, LoadProjectOnThread, (LPVOID)mctx, 0, nullptr);
+				}
 				break;
 			case ID_FILE_SAVEPROJECT:
 				if (mctx->ProjectDir.length() < 1)
