@@ -751,7 +751,9 @@ namespace MusicStudioCX
 		TrackContext** lppTca, int TrackId = -1)
 	{
 
+#ifdef _DEBUG
 		wprintf(L"writing %s\n", WaveFileName);
+#endif
 
 		DWORD nbw = 0;
 		UINT32 SampleSize = sizeof(short);
@@ -899,7 +901,9 @@ namespace MusicStudioCX
 		std::wstring PropFileName(mctx->ProjectDir);
 		PropFileName.append(L"\\properties.json");
 
+#ifdef _DEBUG
 		wprintf(L"reading %s\n", PropFileName.c_str());
+#endif
 
 		HANDLE hFile = CreateFile(PropFileName.c_str(), GENERIC_READ, FILE_SHARE_READ,
 			nullptr, OPEN_EXISTING, 0, nullptr);
@@ -909,7 +913,9 @@ namespace MusicStudioCX
 			memset(buffer, 0, fsize + 1);
 			DWORD nbr = 0;
 			ReadFile(hFile, buffer, fsize, &nbr, nullptr);
+#ifdef _DEBUG
 			printf("read %i bytes\n", nbr);
+#endif
 			if (nbr == fsize) {
 
 				rapidjson::Document d;
@@ -923,6 +929,7 @@ namespace MusicStudioCX
 				mctx->vscroll_pos = d["vscroll_pos"].GetInt();
 				mctx->auto_position_timebar = d["auto_position_timebar"].GetBool();
 
+#ifdef _DEBUG
 				printf("rec time secs %i\n", mctx->rec_time_seconds);
 				printf("zoom mult %i\n", mctx->zoom_mult);
 				printf("frame offset %i\n", mctx->frame_offset);
@@ -930,6 +937,7 @@ namespace MusicStudioCX
 				printf("hs pos %i\n", mctx->hscroll_pos);
 				printf("vs pos %i\n", mctx->vscroll_pos);
 				printf("auto pos tb %i\n", mctx->auto_position_timebar);
+#endif
 
 				rapidjson::Value::Array trackArray = d["TrackContextList"].GetArray();
 
@@ -945,6 +953,7 @@ namespace MusicStudioCX
 					tctx->state = trackArray[i]["state"].GetInt();
 					tctx->IsMinimized = trackArray[i]["IsMinimized"].GetBool();
 
+#ifdef _DEBUG
 					printf("=====\n");
 					printf("track id %i\n", tctx->TrackIndex);
 					printf("in ch %i\n", tctx->InputChannelIndex);
@@ -953,6 +962,7 @@ namespace MusicStudioCX
 					printf("volume %.1f\n", tctx->volume);
 					printf("state %i\n", tctx->state);
 					printf("IsMinimized %i\n", tctx->IsMinimized);
+#endif
 				}
 
 				LPCWSTR TrackFileNames[16] = {
@@ -977,12 +987,16 @@ namespace MusicStudioCX
 						DWORD fsize = GetFileSize(WaveFile, nullptr);
 						SetFilePointer(WaveFile, 44, nullptr, FILE_BEGIN);
 						TrackContext* tctx = mctx->TrackContextList[t];
+#ifdef _DEBUG
 						printf("reading %i bytes\n", DataSize);
+#endif
 						BOOL bres = ReadFile(WaveFile, (LPVOID)tctx->monobuffershort, 
 							DataSize, &nbr, nullptr);
+#ifdef _DEBUG
 						if (bres == FALSE) printf("result is false; %i\n", GetLastError());
 						printf("read %i bytes\n", nbr);
 						if (nbr != DataSize) printf("ERROR: Didn't read all wave bytes\n");
+#endif
 						CloseHandle(WaveFile);
 					}
 				}
@@ -997,14 +1011,18 @@ namespace MusicStudioCX
 
 			}
 			else {
+#ifdef _DEBUG
 				printf("failed to read file");
+#endif
 				StartNewProject();
 			}
 			CloseHandle(hFile);
 		}
+#ifdef _DEBUG
 		else {
 			printf("failed to open props file\n");
 		}
+#endif
 
 		return 0;
 	}

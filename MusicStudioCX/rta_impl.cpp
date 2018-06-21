@@ -232,7 +232,9 @@ BOOL rta_initialize_device_2(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags)
 
 	if (lpDeviceInfo == NULL) return FALSE;
 
+#ifdef _DEBUG
 	printf("Init'ing device...\n");
+#endif
 
 	BOOL retval = FALSE;
 
@@ -266,11 +268,15 @@ BOOL rta_initialize_device_2(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags)
 		audioProps.Options |= AUDCLNT_STREAMOPTIONS_MATCH_FORMAT;
 		result = pAudioClient3->SetClientProperties(&audioProps);
 		CHKERR(result, ERROR_27);
+#ifdef _DEBUG
 		printf("NOTE: Successfully set raw properties.\n");
+#endif
 	}
+#ifdef _DEBUG
 	else {
 		printf("NOTE: RAW is not supported for this device.\n");
 	}
+#endif
 
 	WAVEFORMATEX *FormatToUse = &lpDeviceInfo->WaveFormat;
 	//if (RequestedFormat != nullptr) {
@@ -281,15 +287,18 @@ BOOL rta_initialize_device_2(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags)
 		//CHKERR(result, ERROR_28);
 	//}
 
+#ifdef _DEBUG
 	printf("Native Samples Per Sec %i\n", FormatToUse->nSamplesPerSec);
 	printf("Native Sample Size %i\n", FormatToUse->wBitsPerSample);
 	printf("Native Channels %i\n", FormatToUse->nChannels);
 	printf("Wave Format Tag %x\n", FormatToUse->wFormatTag);
 	printf("Extra Data Size %i\n", FormatToUse->cbSize);
+#endif
 	if (FormatToUse->wFormatTag == WAVE_FORMAT_EXTENSIBLE) {
 
 		WAVEFORMATEXTENSIBLE* lpwfex = (WAVEFORMATEXTENSIBLE*)FormatToUse;
 
+#ifdef _DEBUG
 		printf("EXT Channel Mask %i; Channel Configuration:\n", lpwfex->dwChannelMask);
 		for (DWORD chid = 1; chid < 0x40000; chid *= 2) {
 			if (lpwfex->dwChannelMask & chid) {
@@ -302,11 +311,16 @@ BOOL rta_initialize_device_2(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags)
 		}
 
 		printf("EXT Valid Bits Per Sample %i\n", lpwfex->Samples.wValidBitsPerSample);
+#endif
 		if (IsEqualGUID(lpwfex->SubFormat, KSDATAFORMAT_SUBTYPE_IEEE_FLOAT)) {
+#ifdef _DEBUG
 			printf("EXT is ieee float\n");
+#endif
 		}
 		else {
+#ifdef _DEBUG
 			printf("ERROR: EXT Other format. This program is written to only support IEEE Float data.\n");
+#endif
 			goto done;
 		}
 	}
@@ -319,10 +333,12 @@ BOOL rta_initialize_device_2(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags)
 	result = pAudioClient3->GetSharedModeEnginePeriod(
 		FormatToUse, &DefPeriodInFrames, &p2, &MinPeriodInFrames, &p4);
 	CHKERR(result, ERROR_29);
+#ifdef _DEBUG
 	printf("Def Period in Frames %i\n", DefPeriodInFrames);
 	printf("Fnd Period in Frames %i\n", p2);
 	printf("Min Period in Frames %i\n", MinPeriodInFrames);
 	printf("Max Period in Frames %i\n", p4);
+#endif
 
 	PeriodToUse = DefPeriodInFrames;
 
@@ -340,7 +356,9 @@ BOOL rta_initialize_device_2(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags)
 	}
 	else
 	{
+#ifdef _DEBUG
 		printf("NOTE: Init is successful\n");
+#endif
 
 		lpDeviceInfo->BufferSizeFrames = PeriodToUse;
 		lpDeviceInfo->SizeOfFrame = FormatToUse->nChannels *
@@ -352,16 +370,20 @@ BOOL rta_initialize_device_2(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags)
 
 		UINT32 RealBufferSizeFrames = 0;
 		lpDeviceInfo->pAudioClient->GetBufferSize(&RealBufferSizeFrames);
+#ifdef _DEBUG
 		printf("INIT: Success; buffer size is %i [ %i ]\n",
 			lpDeviceInfo->BufferSizeFrames, RealBufferSizeFrames);
 		if (RealBufferSizeFrames != lpDeviceInfo->BufferSizeFrames) {
 			printf("WARNING! Buffer sizes do not match!\n");
 		}
+#endif
 		lpDeviceInfo->RealBufferSizeFrames = RealBufferSizeFrames;
 
+#ifdef _DEBUG
 		REFERENCE_TIME latency = 0;
 		lpDeviceInfo->pAudioClient->GetStreamLatency(&latency);
 		printf("Latency = %lli\n", latency);
+#endif
 	}
 
 	// done
@@ -369,10 +391,12 @@ BOOL rta_initialize_device_2(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags)
 
 done:
 	if (pMMDeviceEnumerator != NULL) pMMDeviceEnumerator->Release();
+#ifdef _DEBUG
 	if (last_error != NULL)
 	{
 		printf("LAST ERROR: %s\n", last_error);
 	}
+#endif
 	return retval;
 }
 
@@ -458,15 +482,21 @@ void rta_render_frames_rtwq(LPRTA_DEVICE_INFO lpRenderDeviceInfo, RTA_DATA_HANDL
 	CHKERR(hr, ERROR_13);
 
 	// block and wait for handler to complete
+#ifdef _DEBUG
 	printf("Waiting for stop signal...\n");
+#endif
 	WaitForSingleObject(g_RtwqStop, INFINITE);
+#ifdef _DEBUG
 	printf("Got stop signal...\n");
+#endif
 
 	// stop capture and render
 	lpRenderDeviceInfo->pAudioClient->Stop();
 
 done:
+#ifdef _DEBUG
 	if (last_error != NULL) printf("ERROR: %s\n", last_error);
+#endif
 	if (0 != g_RtwqId) {
 		RtwqUnlockWorkQueue(g_RtwqId);
 		RtwqShutdown();
@@ -580,9 +610,14 @@ void rta_capture_frames_rtwq(LPRTA_DEVICE_INFO lpCaptureDeviceInfo,
 	}
 
 	// block and wait for handler to complete
+#ifdef _DEBUG
 	printf("Waiting for stop signal...\n");
+#endif
 	WaitForSingleObject(g_RtwqStop, INFINITE);
+#ifdef _DEBUG
 	printf("Got stop signal...\n");
+#endif
+
 
 	// stop capture and render
 	hr = lpCaptureDeviceInfo->pAudioClient->Stop();
@@ -591,7 +626,9 @@ void rta_capture_frames_rtwq(LPRTA_DEVICE_INFO lpCaptureDeviceInfo,
 	}
 
 done:
+#ifdef _DEBUG
 	if (last_error != NULL) printf("ERROR: %s\n", last_error);
+#endif
 	if (0 != g_RtwqId) {
 		RtwqUnlockWorkQueue(g_RtwqId);
 		RtwqShutdown();
