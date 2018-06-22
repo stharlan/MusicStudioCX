@@ -151,6 +151,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="ChannelStrip.h" />
     <ClInclude Include="CXAudio.h" />
     <ClInclude Include="CxCommon.h" />
     <ClInclude Include="MainWindow.h" />
@@ -164,6 +165,7 @@
     <ClInclude Include="TrackControl.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="ChannelStrip.cpp" />
     <ClCompile Include="CXAudio.cpp" />
     <ClCompile Include="MainWindow.cpp" />
     <ClCompile Include="MusicStudioCX.cpp" />

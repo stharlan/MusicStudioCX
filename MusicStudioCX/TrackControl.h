@@ -26,6 +26,7 @@ typedef struct {
 	BOOL IsMinimized;
 	UINT32 TrackIndex;
 	HWND buttons[3];
+	short MeterVal;
 } TrackContext;
 
 typedef struct {

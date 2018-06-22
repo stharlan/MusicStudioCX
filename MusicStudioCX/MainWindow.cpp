@@ -8,6 +8,7 @@
 #define BTN_STOP 30004
 #define ID_SB_PROGRESS_BAR 30005
 #define ID_STATIC_STATUS 30006
+#define BTN_CHSTRIP 30005
 
 namespace MusicStudioCX
 {
@@ -344,15 +345,23 @@ namespace MusicStudioCX
 
 		if (lpHandlerContext->frameCount < (mctx->max_frames - mctx->frame_offset)) {
 			UINT32 nFrames = lpHandlerContext->frameCount;
+			for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
+				mctx->TrackContextList[TrackIndex]->MeterVal = 0;
+			}
+			short sleft = 0;
+			short sright = 0;
 			for (UINT32 FrameIndex = 0; FrameIndex < nFrames; FrameIndex++) {
 				fval[0] = 0.0f;
 				fval[1] = 0.0f;
+				short sval = 0;
 				for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
 					lpTrackCtx = mctx->TrackContextList[TrackIndex];
 					if (lpTrackCtx != nullptr) {
 						if (FALSE == MusicStudioCX::TrackIsMute(lpTrackCtx->state)) {
 							fval[0] += (float)lpTrackCtx->monobuffershort[mctx->frame_offset + FrameIndex] * lpTrackCtx->volume * lpTrackCtx->leftpan;
 							fval[1] += (float)lpTrackCtx->monobuffershort[mctx->frame_offset + FrameIndex] * lpTrackCtx->volume * lpTrackCtx->rightpan;
+							sval = (short)((float)lpTrackCtx->monobuffershort[mctx->frame_offset + FrameIndex] * lpTrackCtx->volume);
+							if (sval > lpTrackCtx->MeterVal) lpTrackCtx->MeterVal = sval;
 						}
 					}
 				}
@@ -362,7 +371,10 @@ namespace MusicStudioCX
 				if (fval[1] > 32767.0f) fval[1] = 32767.0f;
 				if (fval[1] < -32767.0f) fval[1] = -32767.0f;
 				RenderingDataBuffer[FrameIndex].channel[1] = (short)fval[1];
+				if ((short)fval[0] > sleft) sleft = (short)fval[0];
+				if ((short)fval[1] > sright) sright = (short)fval[1];
 			}
+			ChannelStrip::RequestUpdateMeters(sleft, sright);
 
 			mctx->frame_offset += lpHandlerContext->frameCount;
 
@@ -380,15 +392,23 @@ namespace MusicStudioCX
 		}
 		else {
 			UINT32 nFrames = mctx->max_frames - mctx->frame_offset;
+			for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
+				mctx->TrackContextList[TrackIndex]->MeterVal = 0;
+			}
+			short sleft = 0;
+			short sright = 0;
 			for (UINT32 FrameIndex = 0; FrameIndex < nFrames; FrameIndex++) {
 				fval[0] = 0.0f;
 				fval[1] = 0.0f;
+				short sval = 0;
 				for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
 					lpTrackCtx = mctx->TrackContextList[TrackIndex];
 					if (lpTrackCtx != nullptr) {
 						if (FALSE == MusicStudioCX::TrackIsMute(lpTrackCtx->state)) {
 							fval[0] += (float)lpTrackCtx->monobuffershort[mctx->frame_offset + FrameIndex] * lpTrackCtx->volume * lpTrackCtx->leftpan;
 							fval[1] += (float)lpTrackCtx->monobuffershort[mctx->frame_offset + FrameIndex] * lpTrackCtx->volume * lpTrackCtx->rightpan;
+							sval = (short)((float)lpTrackCtx->monobuffershort[mctx->frame_offset + FrameIndex] * lpTrackCtx->volume);
+							if (sval > lpTrackCtx->MeterVal) lpTrackCtx->MeterVal = sval;
 						}
 					}
 				}
@@ -398,7 +418,10 @@ namespace MusicStudioCX
 				if (fval[1] > 32767.0f) fval[1] = 32767.0f;
 				if (fval[1] < -32767.0f) fval[1] = -32767.0f;
 				RenderingDataBuffer[FrameIndex].channel[1] = (short)fval[1];
+				if ((short)fval[0] > sleft) sleft = (short)fval[0];
+				if ((short)fval[1] > sright) sright = (short)fval[1];
 			}
+			ChannelStrip::RequestUpdateMeters(sleft, sright);
 
 			mctx->frame_offset += nFrames;
 
@@ -1186,6 +1209,9 @@ namespace MusicStudioCX
 			int wmId = LOWORD(wParam);
 			switch (wmId)
 			{
+			case BTN_CHSTRIP:
+				ChannelStrip::ToggleChannelStrip(hWnd);
+				break;
 			case BTN_ZOOM_IN:
 				if (mctx->zoom_mult > 1) mctx->zoom_mult /= 2;
 				for (UINT32 TrackIndex = mctx->vscroll_pos; TrackIndex < NUM_TRACKS; TrackIndex++) {
@@ -1454,15 +1480,16 @@ namespace MusicStudioCX
 		CXCommon::CreateButton(m_hwndMainWindow, 128, 0, 64, 32, L"PLAY", BTN_PLAY);
 		CXCommon::CreateButton(m_hwndMainWindow, 192, 0, 64, 32, L"RECD", BTN_REC);
 		CXCommon::CreateButton(m_hwndMainWindow, 256, 0, 64, 32, L"STOP", BTN_STOP);
+		CXCommon::CreateButton(m_hwndMainWindow, 320, 0, 64, 32, L"CHST", BTN_CHSTRIP);
 
 		// create progress bar here
-		m_hwndProgBar = CreateWindowEx(0, L"msctls_progress32", nullptr, WS_CHILD | WS_VISIBLE, 324, 8, 200, 16,
+		m_hwndProgBar = CreateWindowEx(0, L"msctls_progress32", nullptr, WS_CHILD | WS_VISIBLE, 388, 8, 200, 16,
 			m_hwndMainWindow, (HMENU)ID_SB_PROGRESS_BAR, GetModuleHandle(nullptr), nullptr);
 		SendMessage(m_hwndProgBar, PBM_SETSTEP, (WPARAM)1, 0);
 		SendMessage(m_hwndProgBar, PBM_SETRANGE, 0, MAKELONG(0,100));
 
 		// create label here
-		m_hwndStaticStatus = CreateWindow(L"STATIC", nullptr, WS_CHILD | WS_VISIBLE, 528, 8, 200, 16,
+		m_hwndStaticStatus = CreateWindow(L"STATIC", nullptr, WS_CHILD | WS_VISIBLE, 592, 8, 200, 16,
 			m_hwndMainWindow, (HMENU)ID_STATIC_STATUS, GetModuleHandle(nullptr), nullptr);
 		SetWindowText(m_hwndStaticStatus, L"Ready");
 
