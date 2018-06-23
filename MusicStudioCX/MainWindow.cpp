@@ -17,6 +17,8 @@ namespace MusicStudioCX
 	WCHAR m_szTitle[MAX_LOADSTRING];                  // The title bar text
 	LPRTA_DEVICE_INFO m_lpCaptureDevices = nullptr;
 	LPRTA_DEVICE_INFO m_lpRenderDevices = nullptr;
+	ASIO_DEVICE_INFO* m_lpAsioDevices = nullptr;
+
 	HANDLE m_hCaptureThread = nullptr;
 	HANDLE m_hRenderThread = nullptr;
 	LPCWSTR m_STATUS_READY = L"Ready";
@@ -101,7 +103,7 @@ namespace MusicStudioCX
 		mctx->ProjectDir = std::wstring();
 		mctx->rec_time_seconds = REC_TIME_SECONDS;
 		mctx->vscroll_pos = 0;
-		memset(mctx->WavFileName, 0, 1024 * sizeof(wchar_t));
+		ZeroMemory(mctx->WavFileName, 1024 * sizeof(wchar_t));
 		mctx->zoom_mult = 256;
 
 		for (int t = 0; t < 16; t++) {
@@ -112,7 +114,7 @@ namespace MusicStudioCX
 			tctx->rightpan = 1.0f;
 			tctx->state = 0;
 			tctx->volume = 1.0f;
-			memset(tctx->monobuffershort, 0, SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
+			ZeroMemory(tctx->monobuffershort, SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
 		}
 
 		SetScrollPos(m_hwndMainWindow, SB_HORZ, 0, TRUE);
@@ -134,7 +136,7 @@ namespace MusicStudioCX
 		// The BROWSEINFO struct tells the shell 
 		// how it should display the dialog.
 		BROWSEINFO bi;
-		memset(&bi, 0, sizeof(bi));
+		ZeroMemory(&bi, sizeof(bi));
 
 		bi.ulFlags = BIF_USENEWUI;
 		bi.hwndOwner = hOwner;
@@ -170,6 +172,9 @@ namespace MusicStudioCX
 
 	void CaptureDataHandler(HANDLER_CONTEXT* lpHandlerContext, BOOL* lpCancel)
 	{
+
+		// NOTE: input channel index is always zero
+		// there is no way to change it right now
 
 		// get data from the capBuffer and put it in the track
 
@@ -234,7 +239,7 @@ namespace MusicStudioCX
 
 			mctx->frame_offset += lpHandlerContext->frameCount;
 
-			memset(msg, 0, 256 * sizeof(wchar_t));
+			ZeroMemory(msg, 256 * sizeof(wchar_t));
 			UINT32 mframe = mctx->frame_offset % 48;
 			UINT32 mmsec = mctx->frame_offset / 48;
 			UINT32 msec = mmsec / 1000;
@@ -309,7 +314,7 @@ namespace MusicStudioCX
 	void StartRecording()
 	{
 		wchar_t msg[256];
-		memset(msg, 0, 256 * sizeof(wchar_t));
+		ZeroMemory(msg, 256 * sizeof(wchar_t));
 		SetWindowText(m_hwndStaticStatus, msg);
 		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(m_hwndMainWindow, GWLP_USERDATA);
 		mctx->frame_offset = 0;
@@ -335,7 +340,7 @@ namespace MusicStudioCX
 		}
 	}
 
-	void RenderDataHandler(HANDLER_CONTEXT* lpHandlerContext, BOOL* lpCancel)
+	void MultiChannelRenderDataHandler(HANDLER_CONTEXT* lpHandlerContext, BOOL* lpCancel)
 	{
 		wchar_t msg[256];
 		FRAME2CHSHORT *RenderingDataBuffer = (FRAME2CHSHORT*)(lpHandlerContext->renBuffer);
@@ -343,11 +348,6 @@ namespace MusicStudioCX
 		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(m_hwndMainWindow, GWLP_USERDATA);
 		// max number of output channels = 2
 		float fval[2];
-
-		if (TRUE == m_TriggerStop) {
-			*lpCancel = TRUE;
-			return;
-		}
 
 		if (lpHandlerContext->frameCount < (mctx->max_frames - mctx->frame_offset)) {
 			UINT32 nFrames = lpHandlerContext->frameCount;
@@ -384,7 +384,7 @@ namespace MusicStudioCX
 
 			mctx->frame_offset += lpHandlerContext->frameCount;
 
-			memset(msg, 0, 256 * sizeof(wchar_t));
+			ZeroMemory(msg, 256 * sizeof(wchar_t));
 			UINT32 mframe = mctx->frame_offset % 48;
 			UINT32 mmsec = mctx->frame_offset / 48;
 			UINT32 msec = mmsec / 1000;
@@ -437,7 +437,65 @@ namespace MusicStudioCX
 		}
 	}
 
-	DWORD RenderThread(LPVOID lpThreadParameter)
+	void RenderDataHandler(HANDLER_CONTEXT* lpHandlerContext, BOOL* lpCancel)
+	{
+
+		if (lpCancel == nullptr) return;
+		if (TRUE == m_TriggerStop) {
+#ifdef _DEBUG
+			printf("TriggerStop is TRUE; setting cancel\n");
+#endif
+			*lpCancel = TRUE;
+			return;
+		}
+		if (lpHandlerContext == nullptr) {
+#ifdef _DEBUG
+			printf("handler context is null; setting cancel\n");
+#endif
+			*lpCancel = TRUE;
+			return;
+		}
+		if (lpHandlerContext->renBuffer == nullptr || lpHandlerContext->frameCount < 1) {
+#ifdef _DEBUG
+			printf("ren buffer is null or frame count < 1; setting cancel\n");
+#endif
+			*lpCancel = TRUE;
+			return;
+		}
+
+		if (lpHandlerContext->ChannelIndex > -1) {
+			// handle this as a single channel
+			//switch (lpHandlerContext->fmt) {
+			//case CX_AUDIO_FORMAT::FMT_16_BIT_SIGNED:
+				//ZeroMemory(lpHandlerContext->renBuffer, sizeof(INT16) * lpHandlerContext->frameCount);
+				//break;
+			//case CX_AUDIO_FORMAT::FMT_24_BIT_SIGNED:
+				//ZeroMemory(lpHandlerContext->renBuffer, sizeof(INT32) * lpHandlerContext->frameCount);
+				//break;
+			//}
+			return;
+		}
+		else {
+			MultiChannelRenderDataHandler(lpHandlerContext, lpCancel);
+		}
+
+	}
+
+	DWORD ASIO_RenderThread(LPVOID lpThreadParameter)
+	{
+		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(m_hwndMainWindow, GWLP_USERDATA);
+		ASIO_DEVICE_INFO* devInfo = (ASIO_DEVICE_INFO*)lpThreadParameter;
+#ifdef _DEBUG
+		printf("ASIO_RenderThread: Waiting for CXASIO::asio_start...\n");
+#endif
+		CXASIO::asio_start(devInfo, RenderDataHandler);
+#ifdef _DEBUG
+		printf("ASIO_RenderThread: Done.\n");
+#endif
+		return 0;
+	}
+
+	DWORD WASAPI_RenderThread(LPVOID lpThreadParameter)
 	{
 		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(m_hwndMainWindow, GWLP_USERDATA);
 		LPRTA_DEVICE_INFO devInfo = (LPRTA_DEVICE_INFO)lpThreadParameter;
@@ -448,7 +506,7 @@ namespace MusicStudioCX
 	void StartPlayback()
 	{
 		wchar_t msg[256];
-		memset(msg, 0, 256 * sizeof(wchar_t));
+		ZeroMemory(msg, 256 * sizeof(wchar_t));
 		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(m_hwndMainWindow, GWLP_USERDATA);
 		swprintf_s(msg, 256, L"%i sps %i bps %i ch %zi szflt",
 			mctx->RenderDevInfo->WaveFormat.nSamplesPerSec,
@@ -457,16 +515,49 @@ namespace MusicStudioCX
 			sizeof(float));
 		SetWindowText(m_hwndStaticStatus, msg);
 		mctx->frame_offset = 0;
-		if (TRUE == rta_initialize_device_2(mctx->RenderDevInfo, AUDCLNT_STREAMFLAGS_EVENTCALLBACK))
-		{
+		switch (mctx->adt) {
+		case AUDIO_DEVICE_TYPE::AUDIO_DEVICE_WASAPI:
+			if (TRUE == rta_initialize_device_2(mctx->RenderDevInfo, AUDCLNT_STREAMFLAGS_EVENTCALLBACK))
+			{
+				if (m_hRenderThread) CloseHandle(m_hRenderThread);
+				m_hRenderThread = INVALID_HANDLE_VALUE;
+				m_TriggerStop = FALSE;
+				m_hRenderThread = CreateThread(nullptr, (SIZE_T)0, WASAPI_RenderThread, (LPVOID)mctx->RenderDevInfo, 0, nullptr);
+			}
+#ifdef _DEBUG
+			else {
+				printf("ERROR: Failed to init wasapi render device\n");
+			}
+#endif
+			break;
+		case AUDIO_DEVICE_TYPE::AUDIO_DEVICE_ASIO:
 			if (m_hRenderThread) CloseHandle(m_hRenderThread);
 			m_hRenderThread = INVALID_HANDLE_VALUE;
 			m_TriggerStop = FALSE;
-			m_hRenderThread = CreateThread(nullptr, (SIZE_T)0, RenderThread, (LPVOID)mctx->RenderDevInfo, 0, nullptr);
+			m_hRenderThread = CreateThread(nullptr, (SIZE_T)0, ASIO_RenderThread, (LPVOID)mctx->AsioDevInfo, 0, nullptr);
+			break;
 		}
 	}
 
-	void PopulateDeviceDropdown(EDataFlow dataFlow, HWND hDlg)
+	void PopulateASIODeviceDropdown(HWND hDlg) {
+		
+		ASIO_DEVICE_INFO* lpDev = nullptr;
+		LRESULT zbi = 0;
+		HWND cwnd = GetDlgItem(hDlg, IDC_CMBASIOIFX);
+		
+		if (m_lpAsioDevices != nullptr)
+		{
+			lpDev = m_lpAsioDevices;
+			while (lpDev != nullptr) {
+				zbi = SendMessage(cwnd, CB_ADDSTRING, (WPARAM)0, (LPARAM)lpDev->wcDriverName);
+				SendMessage(cwnd, CB_SETITEMDATA, (WPARAM)zbi, (LPARAM)lpDev->AsioDevInfoId);
+				lpDev = (ASIO_DEVICE_INFO*)lpDev->lpvNext;
+			}
+			SendMessage(cwnd, CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
+		}
+	}
+
+	void PopulateWASAPIDeviceDropdown(EDataFlow dataFlow, HWND hDlg)
 	{
 		HWND cwnd = nullptr;
 		LPRTA_DEVICE_INFO lpDevices = nullptr;
@@ -501,6 +592,108 @@ namespace MusicStudioCX
 		}
 	}
 
+	void GetDeviceFromDialog(HWND hDlg)
+	{
+		HWND cwnd = nullptr;
+		LRESULT lr = 0;
+		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(m_hwndMainWindow, GWLP_USERDATA);
+
+		// get the device type: WASAPI or ASIO
+		if (BST_CHECKED == Button_GetCheck(GetDlgItem(hDlg, IDC_RADIOWASAPI))) {
+			mctx->adt = AUDIO_DEVICE_TYPE::AUDIO_DEVICE_WASAPI;
+#ifdef _DEBUG
+			printf("User chose a WASAPI device\n");
+#endif
+		}
+		else {
+			mctx->adt = AUDIO_DEVICE_TYPE::AUDIO_DEVICE_ASIO;
+#ifdef _DEBUG
+			printf("User chose an ASIO device\n");
+#endif
+		}
+
+		// get the ASIO device
+		cwnd = GetDlgItem(hDlg, IDC_CMBASIOIFX);
+		lr = SendMessage(cwnd, CB_GETCURSEL, 0, 0);
+		LRESULT lrAsioDevInfoId = SendMessage(cwnd, CB_GETITEMDATA, lr, 0);
+		ASIO_DEVICE_INFO* lpAsioDevInfo = m_lpAsioDevices;
+		mctx->AsioDevInfo = nullptr;
+		while (lpAsioDevInfo != nullptr) {
+			if (lpAsioDevInfo->AsioDevInfoId == lrAsioDevInfoId) {
+				mctx->AsioDevInfo = lpAsioDevInfo;
+				lpAsioDevInfo = nullptr;
+			}
+			else {
+				lpAsioDevInfo = (ASIO_DEVICE_INFO*)lpAsioDevInfo->lpvNext;
+			}
+		}
+#ifdef _DEBUG
+		if (mctx->AsioDevInfo == nullptr) {
+			printf("ERROR: Failed to get asio dev info");
+		}
+		else {
+			wprintf(L"ASIO Device is '%s'\n", mctx->AsioDevInfo->wcDriverName);
+		}
+#endif
+
+		// get the WASAPI device
+		cwnd = GetDlgItem(hDlg, IDC_CMBINPUTIFX);
+		lr = SendMessage(cwnd, CB_GETCURSEL, 0, 0);
+		// capture dev info changed
+		LRESULT uiRtaDevInfoId = SendMessage(cwnd, CB_GETITEMDATA, lr, 0);
+		LPRTA_DEVICE_INFO lpDevInfo = m_lpCaptureDevices;
+		mctx->CaptureDevInfo = nullptr;
+#ifdef _DEBUG
+		printf("CAP: Searching for id %i\n", uiRtaDevInfoId);
+#endif
+		while (lpDevInfo != nullptr) {
+			if (lpDevInfo->RtaDevInfoId == uiRtaDevInfoId) {
+				mctx->CaptureDevInfo = lpDevInfo;
+				lpDevInfo = nullptr;
+			}
+			else {
+				lpDevInfo = (LPRTA_DEVICE_INFO)lpDevInfo->pNext;
+			}
+		}
+
+#ifdef _DEBUG
+		if (mctx->CaptureDevInfo == nullptr) {
+			printf("ERROR: Failed to get capture device from dialog\n");
+		}
+		else {
+			wprintf(L"Capturing from '%s'\n", mctx->CaptureDevInfo->DeviceName);
+		}
+#endif
+
+		cwnd = GetDlgItem(hDlg, IDC_CMBOUTPUTIFX);
+		lr = SendMessage(cwnd, CB_GETCURSEL, 0, 0);
+		uiRtaDevInfoId = SendMessage(cwnd, CB_GETITEMDATA, lr, 0);
+		lpDevInfo = m_lpRenderDevices;
+		mctx->RenderDevInfo = nullptr;
+#ifdef _DEBUG
+		printf("REN: Searching for id %i\n", uiRtaDevInfoId);
+#endif
+		while (lpDevInfo != nullptr) {
+			if (lpDevInfo->RtaDevInfoId == uiRtaDevInfoId) {
+				mctx->RenderDevInfo = lpDevInfo;
+				lpDevInfo = nullptr;
+			}
+			else {
+				lpDevInfo = (LPRTA_DEVICE_INFO)lpDevInfo->pNext;
+			}
+		}
+
+#ifdef _DEBUG
+		if (mctx->RenderDevInfo == nullptr) {
+			printf("ERROR: Failed to get render device from dialog\n");
+		}
+		else {
+			wprintf(L"Rendering to '%s'\n", mctx->RenderDevInfo->DeviceName);
+		}
+#endif
+
+	}
+
 	INT_PTR CALLBACK SetupDlgProc(
 		_In_ HWND   hDlg,
 		_In_ UINT   message,
@@ -508,81 +701,38 @@ namespace MusicStudioCX
 		_In_ LPARAM lParam
 	)
 	{
-		LRESULT lr = 0;
-		HWND cwnd = nullptr;
 		UNREFERENCED_PARAMETER(lParam);
+		MainWindowContext * mctx = nullptr;
 		switch (message)
 		{
 		case WM_INITDIALOG:
-			PopulateDeviceDropdown(EDataFlow::eCapture, hDlg);
-			PopulateDeviceDropdown(EDataFlow::eRender, hDlg);
+			mctx = (MainWindowContext*)GetWindowLongPtr(m_hwndMainWindow, GWLP_USERDATA);
+			PopulateWASAPIDeviceDropdown(EDataFlow::eCapture, hDlg);
+			PopulateWASAPIDeviceDropdown(EDataFlow::eRender, hDlg);
+			PopulateASIODeviceDropdown(hDlg);
+			if (mctx->adt == AUDIO_DEVICE_TYPE::AUDIO_DEVICE_WASAPI) {
+				Button_SetCheck(GetDlgItem(hDlg, IDC_RADIOWASAPI), BST_CHECKED);
+				Button_SetCheck(GetDlgItem(hDlg, IDC_RADIOASIO), BST_UNCHECKED);
+			}
+			else {
+				Button_SetCheck(GetDlgItem(hDlg, IDC_RADIOWASAPI), BST_UNCHECKED);
+				Button_SetCheck(GetDlgItem(hDlg, IDC_RADIOASIO), BST_CHECKED);
+			}
 			return (INT_PTR)TRUE;
-
 		case WM_COMMAND:
-			if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
-			{
-				MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(m_hwndMainWindow, GWLP_USERDATA);
-
-				cwnd = GetDlgItem(hDlg, IDC_CMBINPUTIFX);
-				lr = SendMessage(cwnd, CB_GETCURSEL, 0, 0);
-				// capture dev info changed
-				LRESULT uiRtaDevInfoId = SendMessage(cwnd, CB_GETITEMDATA, lr, 0);
-				LPRTA_DEVICE_INFO lpDevInfo = m_lpCaptureDevices;
-				mctx->CaptureDevInfo = nullptr;
-#ifdef _DEBUG
-				printf("CAP: Searching for id %i\n", uiRtaDevInfoId);
-#endif
-				while (lpDevInfo != nullptr) {
-					if (lpDevInfo->RtaDevInfoId == uiRtaDevInfoId) {
-						mctx->CaptureDevInfo = lpDevInfo;
-						lpDevInfo = nullptr;
-					}
-					else {
-						lpDevInfo = (LPRTA_DEVICE_INFO)lpDevInfo->pNext;
-					}
-				}
-
-#ifdef _DEBUG
-				if (mctx->CaptureDevInfo == nullptr) {
-					printf("ERROR: Failed to get capture device from dialog\n");
-				}
-				else {
-					wprintf(L"Capturing from '%s'\n", mctx->CaptureDevInfo->DeviceName);
-				}
-#endif
-
-				cwnd = GetDlgItem(hDlg, IDC_CMBOUTPUTIFX);
-				lr = SendMessage(cwnd, CB_GETCURSEL, 0, 0);
-				uiRtaDevInfoId = SendMessage(cwnd, CB_GETITEMDATA, lr, 0);
-				lpDevInfo = m_lpRenderDevices;
-				mctx->RenderDevInfo = nullptr;
-#ifdef _DEBUG
-				printf("REN: Searching for id %i\n", uiRtaDevInfoId);
-#endif
-				while (lpDevInfo != nullptr) {
-					if (lpDevInfo->RtaDevInfoId == uiRtaDevInfoId) {
-						mctx->RenderDevInfo = lpDevInfo;
-						lpDevInfo = nullptr;
-					}
-					else {
-						lpDevInfo = (LPRTA_DEVICE_INFO)lpDevInfo->pNext;
-					}
-				}
-
-#ifdef _DEBUG
-				if (mctx->RenderDevInfo == nullptr) {
-					printf("ERROR: Failed to get render device from dialog\n");
-				}
-				else {
-					wprintf(L"Rendering to '%s'\n", mctx->RenderDevInfo->DeviceName);
-				}
-#endif
-
+			switch (LOWORD(wParam)) {
+			case IDC_RADIOWASAPI:
+				Button_SetCheck(GetDlgItem(hDlg, IDC_RADIOASIO), BST_UNCHECKED);
+				break;
+			case IDC_RADIOASIO:
+				Button_SetCheck(GetDlgItem(hDlg, IDC_RADIOWASAPI), BST_UNCHECKED);
+				break;
+			case IDOK:
+			case IDCANCEL:
+				GetDeviceFromDialog(hDlg);
 				EndDialog(hDlg, LOWORD(wParam));
-
 				return (INT_PTR)TRUE;
 			}
-			break;
 		}
 		return (INT_PTR)FALSE;
 	}
@@ -632,7 +782,7 @@ namespace MusicStudioCX
 		FillRect(hdc, &r, (HBRUSH)GetStockObject(BLACK_BRUSH));
 
 		// @1024 every 2 sec
-		UINT32 fpt = 48000;
+		UINT32 fpt = SAMPLES_PER_SEC;
 		UINT32 secMult = 1;
 		UINT32 secDiv = 1;
 		if (mctx->zoom_mult > 8192)
@@ -907,10 +1057,11 @@ namespace MusicStudioCX
 			if (NumberOfChannels == 2) {
 				float fval[2];
 				FRAME2CHSHORT* FramesToWrite = (FRAME2CHSHORT*)malloc(SamplesPerSec * sizeof(FRAME2CHSHORT));
+				ZeroMemory(FramesToWrite, SamplesPerSec * sizeof(FRAME2CHSHORT));
 				UINT32 FrameCounter = 0;
 				TrackContext* lpTrackCtx = nullptr;
 				for (UINT32 FrameIndex = 0; FrameIndex < SamplesPerSec * RecordingTimeSeconds; FrameIndex++) {
-					memset(fval, 0, sizeof(float) * 2);
+					ZeroMemory(fval, sizeof(float) * 2);
 					for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
 						lpTrackCtx = lppTca[TrackIndex];
 						if (lpTrackCtx != nullptr) {
@@ -944,6 +1095,7 @@ namespace MusicStudioCX
 			}
 			else {
 				FRAME1CHSHORT* FramesToWrite = (FRAME1CHSHORT*)malloc(SamplesPerSec * sizeof(FRAME1CHSHORT));
+				ZeroMemory(FramesToWrite, SamplesPerSec * sizeof(FRAME1CHSHORT));
 				UINT32 FrameCounter = 0;
 				TrackContext* lpTrackCtx = nullptr;
 				for (UINT32 FrameIndex = 0; FrameIndex < SamplesPerSec * RecordingTimeSeconds; FrameIndex++) {
@@ -992,7 +1144,7 @@ namespace MusicStudioCX
 		if (hFile) {
 			DWORD fsize = GetFileSize(hFile, nullptr);
 			char* buffer = (char*)malloc(fsize + 1);
-			memset(buffer, 0, fsize + 1);
+			ZeroMemory(buffer, fsize + 1);
 			DWORD nbr = 0;
 			ReadFile(hFile, buffer, fsize, &nbr, nullptr);
 #ifdef _DEBUG
@@ -1158,12 +1310,12 @@ namespace MusicStudioCX
 		}
 		writer.EndArray();
 
-		memset(foo, 0, MAX_PATH);
+		ZeroMemory(foo, MAX_PATH);
 		wcstombs_s(&ncv, foo, MAX_PATH, mctx->WavFileName, wcslen(mctx->WavFileName));
 		writer.String("WavFileName");
 		writer.String(foo);
 		
-		memset(foo, 0, MAX_PATH);
+		ZeroMemory(foo, MAX_PATH);
 		wcstombs_s(&ncv, foo, MAX_PATH, mctx->ProjectDir.c_str(), mctx->ProjectDir.length());
 		writer.String("ProjectDir");
 		writer.String(foo);
@@ -1206,7 +1358,7 @@ namespace MusicStudioCX
 	void ExportMixdownAs(HWND hwnd) {
 
 		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(hwnd, GWLP_USERDATA);
-		memset(mctx->WavFileName, 0, 1024 * sizeof(wchar_t));
+		ZeroMemory(mctx->WavFileName, 1024 * sizeof(wchar_t));
 
 		wchar_t* initDir = nullptr;
 		if (mctx->ProjectDir.length() > 0) {
@@ -1214,7 +1366,7 @@ namespace MusicStudioCX
 		}
 
 		OPENFILENAME ofn;
-		memset(&ofn, 0, sizeof(OPENFILENAME));
+		ZeroMemory(&ofn, sizeof(OPENFILENAME));
 		ofn.lStructSize = sizeof(OPENFILENAME);
 		ofn.hwndOwner = hwnd;
 		ofn.hInstance = GetModuleHandle(nullptr);
@@ -1251,10 +1403,11 @@ namespace MusicStudioCX
 		{
 		case WM_NCCREATE:
 			mctx = (MainWindowContext*)malloc(sizeof(MainWindowContext));
-			memset(mctx, 0, sizeof(MainWindowContext));
+			ZeroMemory(mctx, sizeof(MainWindowContext));
 			mctx->rec_time_seconds = REC_TIME_SECONDS; // five minutes
 			mctx->max_frames = SAMPLES_PER_SEC * mctx->rec_time_seconds;
 			mctx->zoom_mult = 256;
+			mctx->adt = AUDIO_DEVICE_TYPE::AUDIO_DEVICE_WASAPI;
 			SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)mctx);
 			return TRUE;
 		case WM_NCDESTROY:
@@ -1373,8 +1526,10 @@ namespace MusicStudioCX
 			}
 			if (m_lpCaptureDevices) rta_free_device_list(m_lpCaptureDevices);
 			if (m_lpRenderDevices) rta_free_device_list(m_lpRenderDevices);
+			if (m_lpAsioDevices) CXASIO::asio_free_device_list(m_lpAsioDevices);
 			m_lpCaptureDevices = nullptr;
 			m_lpRenderDevices = nullptr;
+			m_lpAsioDevices = nullptr;
 			PostQuitMessage(0);
 			break;
 		case WM_VSCROLL:
@@ -1573,6 +1728,9 @@ namespace MusicStudioCX
 		rta_list_supporting_devices_2(&m_lpRenderDevices, &m_StandardFormatOutDefault, DEVICE_STATE_ACTIVE,
 			eRender, AUDCLNT_SHAREMODE_EXCLUSIVE, FALSE);
 		mctx->RenderDevInfo = m_lpRenderDevices;
+
+		CXASIO::asio_list_supporting_devices(&m_lpAsioDevices);
+		mctx->AsioDevInfo = m_lpAsioDevices;
 
 		wchar_t TrackName[] = L"Track##";
 		wchar_t digit = '0';

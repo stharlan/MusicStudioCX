@@ -90,7 +90,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Library\rapidjson\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Library\rapidjson\include;C:\Library\asiosdk2.3\common</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -105,7 +105,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Library\rapidjson\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Library\rapidjson\include;C:\Library\asiosdk2.3\common</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -122,7 +122,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Library\rapidjson\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Library\rapidjson\include;C:\Library\asiosdk2.3\common</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -141,7 +141,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_WINDOWS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>C:\Library\rapidjson\include</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>C:\Library\rapidjson\include;C:\Library\asiosdk2.3\common</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -151,6 +151,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="asio_impl.h" />
     <ClInclude Include="ChannelStrip.h" />
     <ClInclude Include="CXAudio.h" />
     <ClInclude Include="CxCommon.h" />
@@ -165,6 +166,7 @@
     <ClInclude Include="TrackControl.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="asio_impl.cpp" />
     <ClCompile Include="ChannelStrip.cpp" />
     <ClCompile Include="CXAudio.cpp" />
     <ClCompile Include="MainWindow.cpp" />

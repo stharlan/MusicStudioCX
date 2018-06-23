@@ -6,6 +6,11 @@
 namespace MusicStudioCX
 {
 
+	enum AUDIO_DEVICE_TYPE {
+		AUDIO_DEVICE_WASAPI,
+		AUDIO_DEVICE_ASIO
+	};
+
 	typedef struct {
 		UINT32 rec_time_seconds;
 		UINT32 zoom_mult;
@@ -17,6 +22,8 @@ namespace MusicStudioCX
 		TrackContext* TrackContextList[NUM_TRACKS];
 		LPRTA_DEVICE_INFO CaptureDevInfo = nullptr;
 		LPRTA_DEVICE_INFO RenderDevInfo = nullptr;
+		ASIO_DEVICE_INFO* AsioDevInfo = nullptr;
+		AUDIO_DEVICE_TYPE adt;
 		wchar_t WavFileName[1024];
 		std::wstring ProjectDir;
 	} MainWindowContext;

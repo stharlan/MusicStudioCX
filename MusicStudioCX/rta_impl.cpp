@@ -44,28 +44,31 @@ const char* rta_get_last_error()
 	return last_error;
 }
 
-static HANDLE HeapHandle = INVALID_HANDLE_VALUE;
+//static HANDLE HeapHandle = INVALID_HANDLE_VALUE;
 
-LPVOID rta_alloc(SIZE_T size) {
-	LPVOID result = NULL;
-	if (HeapHandle == INVALID_HANDLE_VALUE) {
-		HeapHandle = GetProcessHeap();
-	}
-	if (HeapHandle != INVALID_HANDLE_VALUE) {
-		result = HeapAlloc(HeapHandle, HEAP_ZERO_MEMORY, size);
-	}
-	return result;
-}
+//LPVOID rta_alloc(SIZE_T size) {
+//	LPVOID result = NULL;
+//	if (HeapHandle == INVALID_HANDLE_VALUE) {
+//		HeapHandle = GetProcessHeap();
+//	}
+//	if (HeapHandle != INVALID_HANDLE_VALUE) {
+//		result = malloc(size);
+//		if (result) {
+//			ZeroMemory(result, size);
+//		}
+//	}
+//	return result;
+//}
 
-void rta_free(LPVOID pvoid) {
-	LPVOID result = NULL;
-	if (HeapHandle == INVALID_HANDLE_VALUE) {
-		HeapHandle = GetProcessHeap();
-	}
-	if (HeapHandle != INVALID_HANDLE_VALUE) {
-		HeapFree(HeapHandle, 0, pvoid);
-	}
-}
+//void rta_free(LPVOID pvoid) {
+//	LPVOID result = NULL;
+//	if (HeapHandle == INVALID_HANDLE_VALUE) {
+//		HeapHandle = GetProcessHeap();
+//	}
+//	if (HeapHandle != INVALID_HANDLE_VALUE) {
+//		free(pvoid);
+//	}
+//}
 
 UINT32 rta_list_supporting_devices_2(RTA_DEVICE_INFO** lppDeviceInfo,
 	WAVEFORMATEX *RequestedFormat,
@@ -155,7 +158,8 @@ UINT32 rta_list_supporting_devices_2(RTA_DEVICE_INFO** lppDeviceInfo,
 								if (SUCCEEDED(result)) {
 
 									// create data structure
-									LPRTA_DEVICE_INFO lpdi = (LPRTA_DEVICE_INFO)rta_alloc(sizeof(RTA_DEVICE_INFO));
+									LPRTA_DEVICE_INFO lpdi = (LPRTA_DEVICE_INFO)malloc(sizeof(RTA_DEVICE_INFO));
+									ZeroMemory(lpdi, sizeof(RTA_DEVICE_INFO));
 									lpdi->RtaDevInfoId = pcDeviceId;
 									lpdi->DeviceId = lpwstrDeviceId;
 									lpdi->DeviceName = _wcsdup(varName.pwszVal);
@@ -217,10 +221,10 @@ void rta_free_device_list(LPRTA_DEVICE_INFO lpDeviceInfo)
 		pNext = (LPRTA_DEVICE_INFO)(pThis->pNext);
 		if (pThis->DeviceName != NULL) free(pThis->DeviceName);
 		if (pThis->DeviceId != NULL) CoTaskMemFree(pThis->DeviceId);
-		if (pThis->FrameBufferByte != NULL) rta_free(pThis->FrameBufferByte);
+		if (pThis->FrameBufferByte != NULL) free(pThis->FrameBufferByte);
 		if (pThis->pAudioClient != NULL) pThis->pAudioClient->Release();
 		if (pThis->pMMDevice != NULL) pThis->pMMDevice->Release();
-		rta_free(pThis);
+		free(pThis);
 		pThis = pNext;
 	}
 }
@@ -368,8 +372,8 @@ BOOL rta_initialize_device_2(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags)
 			(FormatToUse->wBitsPerSample / 8);
 
 		// size of frame buffer
-		lpDeviceInfo->FrameBufferByte = (BYTE*)rta_alloc(
-			lpDeviceInfo->BufferSizeFrames * lpDeviceInfo->SizeOfFrame);
+		lpDeviceInfo->FrameBufferByte = (BYTE*)malloc(lpDeviceInfo->BufferSizeFrames * lpDeviceInfo->SizeOfFrame);
+		ZeroMemory(lpDeviceInfo->FrameBufferByte, lpDeviceInfo->BufferSizeFrames * lpDeviceInfo->SizeOfFrame);
 
 		UINT32 RealBufferSizeFrames = 0;
 		lpDeviceInfo->pAudioClient->GetBufferSize(&RealBufferSizeFrames);

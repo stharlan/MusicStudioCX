@@ -92,7 +92,7 @@ namespace MusicStudioCX
 			DeleteObject(GreenPen);
 		}
 
-		memset(WindowName, 0, 16 * sizeof(wchar_t));
+		ZeroMemory(WindowName, 16 * sizeof(wchar_t));
 		GetWindowText(hWnd, WindowName, 16);
 
 		SetTextColor(hdc, 0x00000000);
@@ -199,7 +199,7 @@ namespace MusicStudioCX
 	void initialize_track_window()
 	{
 		WNDCLASS wcctl;
-		memset(&wcctl, 0, sizeof(WNDCLASS));
+		ZeroMemory(&wcctl, sizeof(WNDCLASS));
 
 		wcctl.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
 		wcctl.hCursor = LoadCursor(nullptr, IDC_ARROW);
@@ -216,7 +216,7 @@ namespace MusicStudioCX
 	{
 		// allocate context
 		TrackContext* ctx = (TrackContext*)malloc(sizeof(TrackContext));
-		memset(ctx, 0, sizeof(TrackContext));
+		ZeroMemory(ctx, sizeof(TrackContext));
 		mctx = (MainWindowContext*)GetWindowLongPtr(parent, GWLP_USERDATA);
 		// sixty seconds worth of samples
 		ctx->state = 0;
@@ -228,13 +228,13 @@ namespace MusicStudioCX
 #ifdef _DEBUG
 		printf("allocating %i bytes for monobuffershort\n", SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
 		MEMORYSTATUSEX msex;
-		memset(&msex, 0, sizeof(MEMORYSTATUSEX));
+		ZeroMemory(&msex, sizeof(MEMORYSTATUSEX));
 		msex.dwLength = sizeof(MEMORYSTATUSEX);
 		GlobalMemoryStatusEx(&msex);
 		printf("memory load %i%%\n", msex.dwMemoryLoad);
 #endif
 		ctx->monobuffershort = (short*)malloc(SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
-		memset(ctx->monobuffershort, 0, SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
+		ZeroMemory(ctx->monobuffershort, SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
 		return ctx;
 	}
 

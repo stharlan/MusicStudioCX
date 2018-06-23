@@ -15,20 +15,11 @@ typedef struct {
 	UINT32 RtaDevInfoId;
 } RTA_DEVICE_INFO, *LPRTA_DEVICE_INFO;
 
-typedef struct {
-	BYTE* capBuffer;
-	BYTE* renBuffer;
-	UINT32 frameCount;
-	UINT32 LastFrameCounts[3];
-} HANDLER_CONTEXT;
-
-typedef void(*RTA_DATA_HANDLER)(HANDLER_CONTEXT* lpHandlerContext, BOOL* lpCancel);
-
 const char* rta_get_last_error();
 
-LPVOID rta_alloc(SIZE_T size);
+//LPVOID rta_alloc(SIZE_T size);
 
-void rta_free(LPVOID pvoid);
+//void rta_free(LPVOID pvoid);
 
 UINT32 rta_list_supporting_devices_2(RTA_DEVICE_INFO** lppDeviceInfo,
 	WAVEFORMATEX *RequestedFormat,

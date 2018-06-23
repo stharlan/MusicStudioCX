@@ -22,7 +22,12 @@ RtaAudioHandler::RtaAudioHandler()
 	this->lpCaptureDeviceInfo = NULL;
 	this->lpRenderDeviceInfo = NULL;
 	this->pHandler = NULL;
-	memset(&this->hdlrCtx, 0, sizeof(HANDLER_CONTEXT));
+	ZeroMemory(&this->hdlrCtx, sizeof(HANDLER_CONTEXT));
+	// for WASAPI, all channels are in the same buffer
+	// so, -1 they will all be processed at once
+	// always 16 bit signed for wasapi
+	this->hdlrCtx.ChannelIndex = -1;
+	this->hdlrCtx.fmt = CX_AUDIO_FORMAT::FMT_16_BIT_SIGNED;
 }
 
 // cleanup the audio handler
