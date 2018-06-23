@@ -156,6 +156,7 @@ UINT32 rta_list_supporting_devices_2(RTA_DEVICE_INFO** lppDeviceInfo,
 
 									// create data structure
 									LPRTA_DEVICE_INFO lpdi = (LPRTA_DEVICE_INFO)rta_alloc(sizeof(RTA_DEVICE_INFO));
+									lpdi->RtaDevInfoId = pcDeviceId;
 									lpdi->DeviceId = lpwstrDeviceId;
 									lpdi->DeviceName = _wcsdup(varName.pwszVal);
 									memcpy(&lpdi->WaveFormat, RequestedFormat, sizeof(WAVEFORMATEX));
@@ -350,12 +351,14 @@ BOOL rta_initialize_device_2(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags)
 
 	if (FAILED(result))
 	{
+		pAudioClient3->Release();
 		lpDeviceInfo->BufferSizeFrames = 0;
 		last_error = ERROR_8;
 		goto done;
 	}
 	else
 	{
+		pAudioClient3->Release();
 #ifdef _DEBUG
 		printf("NOTE: Init is successful\n");
 #endif
@@ -505,6 +508,8 @@ done:
 	if (g_RtwqStop != NULL) CloseHandle(g_RtwqStop);
 	if (pAudioRenderClient != NULL) pAudioRenderClient->Release();
 	if (pRenderAudioHandler) pRenderAudioHandler->Release();
+	if (lpRenderDeviceInfo->pAudioClient) lpRenderDeviceInfo->pAudioClient->Release();
+	lpRenderDeviceInfo->pAudioClient = nullptr;
 
 }
 
@@ -638,4 +643,9 @@ done:
 	if (pAudioCaptureClient != NULL) pAudioCaptureClient->Release();
 	if (pAudioRenderClient != NULL) pAudioRenderClient->Release();
 	if (pAudioHandler) pAudioHandler->Release();
+	if (lpRenderDeviceInfo->pAudioClient) lpRenderDeviceInfo->pAudioClient->Release();
+	lpRenderDeviceInfo->pAudioClient = nullptr;
+	if (lpCaptureDeviceInfo->pAudioClient) lpCaptureDeviceInfo->pAudioClient->Release();
+	lpCaptureDeviceInfo->pAudioClient = nullptr;
+
 }
