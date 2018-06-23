@@ -12,6 +12,7 @@ typedef struct {
 	VARIANT_BOOL IsRawSupported;
 	DWORD SizeOfFrame;
 	WAVEFORMATEX WaveFormat;
+	UINT32 RtaDevInfoId;
 } RTA_DEVICE_INFO, *LPRTA_DEVICE_INFO;
 
 typedef struct {

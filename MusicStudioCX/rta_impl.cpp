@@ -1,6 +1,8 @@
 
 #include "stdafx.h"
 
+#define REFTIMES_PER_SEC 10000000
+
 //#define CHKERR(HR,E) if (FAILED(HR)) { last_error = E; goto done; }
 #define CHKERR(HR,E) ThrowIfFailed(HR)
 
@@ -156,6 +158,7 @@ UINT32 rta_list_supporting_devices_2(RTA_DEVICE_INFO** lppDeviceInfo,
 
 									// create data structure
 									LPRTA_DEVICE_INFO lpdi = (LPRTA_DEVICE_INFO)rta_alloc(sizeof(RTA_DEVICE_INFO));
+									lpdi->RtaDevInfoId = pcDeviceId;
 									lpdi->DeviceId = lpwstrDeviceId;
 									lpdi->DeviceName = _wcsdup(varName.pwszVal);
 									memcpy(&lpdi->WaveFormat, RequestedFormat, sizeof(WAVEFORMATEX));
@@ -227,13 +230,30 @@ void rta_free_device_list(LPRTA_DEVICE_INFO lpDeviceInfo)
 BOOL rta_initialize_device_2(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags) 
 {
 
-	last_error = NULL;
-	UINT32 PeriodToUse = 0;
+#ifdef _DEBUG
+	printf("=====> entering -> rta_initialize_device_2\n");
+#endif
 
-	if (lpDeviceInfo == NULL) return FALSE;
+	// 480 samples at 48,000 samples per sec
+	// this should equate to 1/100 of a second
+	// ref time is 100 nanosecond units
+	// there are 1,000,000,000 nanoseconds in a second
+	// there are    10,000,000 reftimes per second
+	// there are       100,000 reftimes per 1/100th of a second
+	UINT32 PeriodToUse = SAMPLES_PER_SEC / 100;
+	REFERENCE_TIME rtRequested = REFTIMES_PER_SEC / 100;
+
+	last_error = NULL;
+
+	if (lpDeviceInfo == NULL) {
+#ifdef _DEBUG
+		printf("device info is null; aborting init\n");
+#endif
+		return FALSE;
+	}
 
 #ifdef _DEBUG
-	printf("Init'ing device...\n");
+	wprintf(L"Init'ing device '%s'...\n", lpDeviceInfo->DeviceName);
 #endif
 
 	BOOL retval = FALSE;
@@ -329,27 +349,48 @@ BOOL rta_initialize_device_2(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags)
 		//goto done;
 	//}
 
-	UINT32 DefPeriodInFrames, p2, MinPeriodInFrames, p4;
-	result = pAudioClient3->GetSharedModeEnginePeriod(
-		FormatToUse, &DefPeriodInFrames, &p2, &MinPeriodInFrames, &p4);
-	CHKERR(result, ERROR_29);
-#ifdef _DEBUG
-	printf("Def Period in Frames %i\n", DefPeriodInFrames);
-	printf("Fnd Period in Frames %i\n", p2);
-	printf("Min Period in Frames %i\n", MinPeriodInFrames);
-	printf("Max Period in Frames %i\n", p4);
-#endif
+	//UINT32 DefPeriodInFrames, p2a, MinPeriodInFrames, p4a;
+	//result = pAudioClient3->GetSharedModeEnginePeriod(
+		//FormatToUse, &DefPeriodInFrames, &p2a, &MinPeriodInFrames, &p4a);
+	//if (result == AUDCLNT_E_UNSUPPORTED_FORMAT) {
+		//printf("ERROR: Format is not supported\n");
+		//CHKERR(result, ERROR_29);
+	//} else if (FAILED(result)) {
+		//printf("pAudioClient3->GetSharedModeEnginePeriod failed with %x\n", result);
+		//result = pAudioClient3->GetBufferSize(&DefPeriodInFrames);
+		//if (FAILED(result)) {
+			//printf("pAudioClient3->GetBufferSize failed with %x\n", result);
+			//CHKERR(result, ERROR_29);
+		//}
+		//else {
+			//MinPeriodInFrames = DefPeriodInFrames;
+		//}
+	//}
+//#ifdef _DEBUG
+	//printf("Def Period in Frames %i\n", DefPeriodInFrames);
+	//printf("Fnd Period in Frames %i\n", p2a);
+	//printf("Min Period in Frames %i\n", MinPeriodInFrames);
+	//printf("Max Period in Frames %i\n", p4a);
+//#endif
 
-	PeriodToUse = DefPeriodInFrames;
+	//PeriodToUse = DefPeriodInFrames;
 
-	result = pAudioClient3->InitializeSharedAudioStream(
+	//result = pAudioClient3->InitializeSharedAudioStream(
+		//StreamFlags,
+		//PeriodToUse,
+		//FormatToUse,
+		//nullptr);
+
+	result = pAudioClient3->Initialize(AUDCLNT_SHAREMODE_EXCLUSIVE,
 		StreamFlags,
-		PeriodToUse,
+		rtRequested,
+		rtRequested,
 		FormatToUse,
 		nullptr);
 
 	if (FAILED(result))
 	{
+		printf("ERROR: failed to init\n");
 		lpDeviceInfo->BufferSizeFrames = 0;
 		last_error = ERROR_8;
 		goto done;
@@ -396,12 +437,17 @@ done:
 	{
 		printf("LAST ERROR: %s\n", last_error);
 	}
+	printf("Device is initialized\n");
 #endif
 	return retval;
 }
 
 void rta_render_frames_rtwq(LPRTA_DEVICE_INFO lpRenderDeviceInfo, RTA_DATA_HANDLER pHandler)
 {
+
+#ifdef _DEBUG
+	printf("=====> entering -> rta_render_frames_rtwq\n");
+#endif
 
 	HRESULT hr = 0;
 
@@ -511,6 +557,10 @@ done:
 void rta_capture_frames_rtwq(LPRTA_DEVICE_INFO lpCaptureDeviceInfo,
 	LPRTA_DEVICE_INFO lpRenderDeviceInfo, RTA_DATA_HANDLER pHandler)
 {
+
+#ifdef _DEBUG
+	printf("=====> entering -> rta_capture_frames_rtwq\n");
+#endif
 
 	HRESULT hr = 0;
 
