@@ -227,11 +227,6 @@ namespace MusicStudioCX
 		ctx->IsMinimized = FALSE;
 #ifdef _DEBUG
 		printf("allocating %i bytes for monobuffershort\n", SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
-		MEMORYSTATUSEX msex;
-		memset(&msex, 0, sizeof(MEMORYSTATUSEX));
-		msex.dwLength = sizeof(MEMORYSTATUSEX);
-		GlobalMemoryStatusEx(&msex);
-		printf("memory load %i%%\n", msex.dwMemoryLoad);
 #endif
 		ctx->monobuffershort = (short*)malloc(SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
 		memset(ctx->monobuffershort, 0, SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);

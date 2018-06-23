@@ -294,17 +294,7 @@ namespace MusicStudioCX
 
 	DWORD CaptureThread(LPVOID lpThreadParameter)
 	{
-
-#ifdef _DEBUG
-		printf("=====> entering CaptureThread\n");
-#endif
-
 		MainWindowContext* mctx = (MainWindowContext*)lpThreadParameter;
-		
-#ifdef _DEBUG
-		printf("=====> starting capture frames\n");
-#endif
-
 		rta_capture_frames_rtwq(mctx->CaptureDevInfo, mctx->RenderDevInfo, CaptureDataHandler);
 
 		for (UINT32 TrackIndex = mctx->vscroll_pos; TrackIndex < NUM_TRACKS; TrackIndex++) {
@@ -318,24 +308,13 @@ namespace MusicStudioCX
 
 	void StartRecording()
 	{
-
-#ifdef _DEBUG
-		printf("=====> entering StartRecording\n");
-#endif
-		
 		wchar_t msg[256];
 		memset(msg, 0, 256 * sizeof(wchar_t));
 		SetWindowText(m_hwndStaticStatus, msg);
 		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(m_hwndMainWindow, GWLP_USERDATA);
 		mctx->frame_offset = 0;
 		BOOL isCapOk = rta_initialize_device_2(mctx->CaptureDevInfo, AUDCLNT_STREAMFLAGS_EVENTCALLBACK);
-#ifdef _DEBUG
-		printf("cap is ok = %i\n", isCapOk);
-#endif
 		BOOL isRenOk = rta_initialize_device_2(mctx->RenderDevInfo, 0);
-#ifdef _DEBUG
-		printf("ren is ok = %i\n", isRenOk);
-#endif
 		if (isCapOk && isRenOk)
 		{
 			swprintf_s(msg, 256, L"%i sps %i bps %i ch %zi szflt",
@@ -347,18 +326,7 @@ namespace MusicStudioCX
 			m_hCaptureThread = INVALID_HANDLE_VALUE;
 			m_TriggerStop = FALSE;
 			m_hCaptureThread = CreateThread(nullptr, (SIZE_T)0, CaptureThread, (LPVOID)mctx, 0, nullptr);
-		}
-		else {
-			if (FALSE == isCapOk) {
-				MessageBox(m_hwndMainWindow, L"Capture device failed to initialize\n", L"ERROR", MB_OK);
-			}
-			else {
-				MessageBox(m_hwndMainWindow, L"Render device failed to initialize\n", L"ERROR", MB_OK);
-			}
-#ifdef _DEBUG
-			printf("cap or ren failed to init\n");
-#endif
-		}
+		}	
 	}
 
 	void RenderDataHandler(HANDLER_CONTEXT* lpHandlerContext, BOOL* lpCancel)
@@ -495,8 +463,8 @@ namespace MusicStudioCX
 	void PopulateDeviceDropdown(EDataFlow dataFlow, HWND hDlg)
 	{
 		HWND cwnd = nullptr;
+		UINT DevCtr = 0;
 		LPRTA_DEVICE_INFO lpDevices = nullptr;
-		UINT zbi = 0;
 
 		if (dataFlow == EDataFlow::eCapture) {
 			cwnd = GetDlgItem(hDlg, IDC_CMBINPUTIFX);
@@ -512,15 +480,8 @@ namespace MusicStudioCX
 		if (lpDevices != nullptr) {
 			LPRTA_DEVICE_INFO lpThis = lpDevices;
 			while (lpThis != nullptr) {
-#ifdef _DEBUG
-				wprintf(L"Adding Device Name '%s'\n", lpThis->DeviceName);
-				printf("\tID is %i\n", lpThis->RtaDevInfoId);
-#endif
-				zbi = SendMessage(cwnd, CB_ADDSTRING, (WPARAM)0, (LPARAM)lpThis->DeviceName);
-#ifdef _DEBUG
-				printf("\tzbi = %i\n", zbi);
-#endif
-				SendMessage(cwnd, CB_SETITEMDATA, (WPARAM)zbi, (LPARAM)lpThis->RtaDevInfoId);
+				SendMessage(cwnd, CB_ADDSTRING, (WPARAM)0, (LPARAM)lpThis->DeviceName);
+				SendMessage(cwnd, CB_SETITEMDATA, (WPARAM)DevCtr++, (LPARAM)lpThis);
 				lpThis = (LPRTA_DEVICE_INFO)lpThis->pNext;
 			}
 			SendMessage(cwnd, CB_SETCURSEL, (WPARAM)0, (LPARAM)0);
@@ -547,62 +508,16 @@ namespace MusicStudioCX
 		case WM_COMMAND:
 			if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
 			{
- 				MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(m_hwndMainWindow, GWLP_USERDATA);
+				MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(m_hwndMainWindow, GWLP_USERDATA);
 
 				cwnd = GetDlgItem(hDlg, IDC_CMBINPUTIFX);
 				lr = SendMessage(cwnd, CB_GETCURSEL, 0, 0);
 				// capture dev info changed
-				UINT32 uiRtaDevInfoId = SendMessage(cwnd, CB_GETITEMDATA, lr, 0);
-				LPRTA_DEVICE_INFO lpDevInfo = m_lpCaptureDevices;
-				mctx->CaptureDevInfo = nullptr;
-#ifdef _DEBUG
-				printf("CAP: Searching for id %i\n", uiRtaDevInfoId);
-#endif
-				while (lpDevInfo != nullptr) {
-					if (lpDevInfo->RtaDevInfoId == uiRtaDevInfoId) {
-						mctx->CaptureDevInfo = lpDevInfo;
-						lpDevInfo = nullptr;
-					}
-					else {
-						lpDevInfo = (LPRTA_DEVICE_INFO)lpDevInfo->pNext;
-					}
-				}
-
-#ifdef _DEBUG
-				if (mctx->CaptureDevInfo == nullptr) {
-					printf("ERROR: Failed to get capture device from dialog\n");
-				}
-				else {
-					wprintf(L"Capturing from '%s'\n", mctx->CaptureDevInfo->DeviceName);
-				}
-#endif
+				mctx->CaptureDevInfo = (LPRTA_DEVICE_INFO)SendMessage(cwnd, CB_GETITEMDATA, lr, 0);
 
 				cwnd = GetDlgItem(hDlg, IDC_CMBOUTPUTIFX);
 				lr = SendMessage(cwnd, CB_GETCURSEL, 0, 0);
-				uiRtaDevInfoId = SendMessage(cwnd, CB_GETITEMDATA, lr, 0);
-				lpDevInfo = m_lpRenderDevices;
-				mctx->RenderDevInfo = nullptr;
-#ifdef _DEBUG
-				printf("REN: Searching for id %i\n", uiRtaDevInfoId);
-#endif
-				while (lpDevInfo != nullptr) {
-					if (lpDevInfo->RtaDevInfoId == uiRtaDevInfoId) {
-						mctx->RenderDevInfo = lpDevInfo;
-						lpDevInfo = nullptr;
-					}
-					else {
-						lpDevInfo = (LPRTA_DEVICE_INFO)lpDevInfo->pNext;
-					}
-				}
-
-#ifdef _DEBUG
-				if (mctx->RenderDevInfo == nullptr) {
-					printf("ERROR: Failed to get render device from dialog\n");
-				}
-				else {
-					wprintf(L"Rendering to '%s'\n", mctx->RenderDevInfo->DeviceName);
-				}
-#endif
+				mctx->RenderDevInfo = (LPRTA_DEVICE_INFO)SendMessage(cwnd, CB_GETITEMDATA, lr, 0);
 
 				EndDialog(hDlg, LOWORD(wParam));
 
