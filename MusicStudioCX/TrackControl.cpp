@@ -10,16 +10,16 @@ namespace MusicStudioCX
 
 	INT_PTR CALLBACK TrackPropsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
-	const UINT32 TRACK_STATE_MUTE = 0x01;
-	const UINT32 TRACK_STATE_ARMED = 0x02;
+	//const UINT32 TRACK_STATE_MUTE = 0x01;
+	//const UINT32 TRACK_STATE_ARMED = 0x02;
 
-	BOOL TrackIsMute(UINT32 state) {
-		return (state & TRACK_STATE_MUTE ? TRUE : FALSE);
-	}
+	//BOOL TrackIsMute(UINT32 state) {
+		//return (state & TRACK_STATE_MUTE ? TRUE : FALSE);
+	//}
 
-	BOOL TrackIsArmed(UINT32 state) {
-		return (state & TRACK_STATE_ARMED ? TRUE : FALSE);
-	}
+	//BOOL TrackIsArmed(UINT32 state) {
+		//return (state & TRACK_STATE_ARMED ? TRUE : FALSE);
+	//}
 
 	void DrawTrackWindow(HWND hWnd)
 	{
@@ -31,7 +31,8 @@ namespace MusicStudioCX
 		HGDIOBJ OldPen = nullptr;
 		wchar_t WindowName[16];
 
-		if (FALSE == ctx->IsMinimized) {
+		//if (FALSE == ctx->IsMinimized) {
+		if(FALSE == CheckState(ctx, TRACK_STATE_MINIMIZED)) {
 			HBRUSH GreenBrush = CreateSolidBrush(RGB(0, 255, 0));
 			HBRUSH RedBrush = CreateSolidBrush(RGB(255, 0, 0));
 
@@ -39,11 +40,13 @@ namespace MusicStudioCX
 			r1.right = WVFRM_OFFSET;
 			r1.top = 32;
 			r1.bottom = 64;
-			FillRect(hdc, &r1, ((ctx->state & TRACK_STATE_ARMED) ? GreenBrush : RedBrush));
+			//FillRect(hdc, &r1, ((ctx->state & TRACK_STATE_ARMED) ? GreenBrush : RedBrush));
+			FillRect(hdc, &r1, (CheckState(ctx, TRACK_STATE_ARMED) ? GreenBrush : RedBrush));
 
 			r1.top += 32;
 			r1.bottom += 32;
-			FillRect(hdc, &r1, ((ctx->state & TRACK_STATE_MUTE) ? GreenBrush : RedBrush));
+			//FillRect(hdc, &r1, ((ctx->state & TRACK_STATE_MUTE) ? GreenBrush : RedBrush));
+			FillRect(hdc, &r1, (CheckState(ctx, TRACK_STATE_MUTE) ? GreenBrush : RedBrush));
 
 			DeleteObject(GreenBrush);
 			DeleteObject(RedBrush);
@@ -56,7 +59,8 @@ namespace MusicStudioCX
 		HPEN grayPen = CreatePen(PS_SOLID, 1, RGB(0x66, 0x66, 0x66));
 		HBRUSH grayHatch = CreateHatchBrush(HS_DIAGCROSS, RGB(0x66, 0x66, 0x66));
 		HGDIOBJ oldPen1 = SelectObject(hdc, grayPen);
-		if (TRUE == ctx->IsMinimized) {
+		//if (TRUE == ctx->IsMinimized) {
+		if(TRUE == CheckState(ctx, TRACK_STATE_MINIMIZED)) {
 			r.bottom = 32;
 			COLORREF oldColor = SetBkColor(hdc, RGB(0x33, 0x33, 0x33));
 			FillRect(hdc, &r, grayHatch);
@@ -72,7 +76,8 @@ namespace MusicStudioCX
 		DeleteObject(grayPen);
 		DeleteObject(grayHatch);
 
-		if (FALSE == ctx->IsMinimized) {
+		//if (FALSE == ctx->IsMinimized) {
+		if(FALSE == CheckState(ctx, TRACK_STATE_MINIMIZED)) {
 			HPEN GreenPen = CreatePen(PS_SOLID, 1, RGB(0, 255, 0));
 			OldPen = SelectObject(hdc, GreenPen);
 
@@ -107,67 +112,53 @@ namespace MusicStudioCX
 
 	LRESULT CALLBACK track_wnd_callback(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
-		TrackContext * ctx = nullptr;
+		TrackContext * tctx = nullptr;
 		MainWindowContext* mctx = nullptr;
 		WORD mx = 0, my = 0;
 		RECT wr;
 		UINT32 itemHeight = 0;
+		BOOL IsArmed = FALSE;
+		BOOL IsMute = FALSE;
 		switch (message)
 		{
+		case WM_LBUTTONDOWN:
+			tctx = get_track_context(hWnd);
+			break;
 		case WM_LBUTTONDBLCLK:
-			ctx = get_track_context(hWnd);
+			tctx = get_track_context(hWnd);
 			mx = LOWORD(lParam);
 			my = HIWORD(lParam);
 			if (mx > 0 && mx < WVFRM_OFFSET && my > 0 && my < 32) {
-				if (ctx->IsMinimized == FALSE) {
-					ctx->IsMinimized = TRUE;
-					//ShowWindow(ctx->buttons[0], SW_HIDE);
-					//ShowWindow(ctx->buttons[1], SW_HIDE);
-					//ShowWindow(ctx->buttons[2], SW_HIDE);
-					//GetWindowRect(hWnd, &wr);
-					//SetWindowPos(hWnd, nullptr, 0, 0, wr.right - wr.left, 32, SWP_NOZORDER | SWP_NOMOVE);
-					//InvalidateRect(hWnd, nullptr, FALSE);
-					//while (ctx->NextTrackWindow != nullptr) {
-						//ctx = get_track_context(ctx->NextTrackWindow);
-						//GetWindowRect(ctx->TrackWindow, &wr);
-						//SetWindowPos(ctx->TrackWindow, nullptr, 0, (ctx->TrackIndex * 128) - 96 + 32, 0, 0, SWP_NOZORDER | SWP_NOSIZE);
-						//InvalidateRect(ctx->TrackWindow, nullptr, FALSE);
-					//};
-				}
-				else {
-					ctx->IsMinimized = FALSE;
-					//ShowWindow(ctx->buttons[0], SW_SHOW);
-					//ShowWindow(ctx->buttons[1], SW_SHOW);
-					//ShowWindow(ctx->buttons[2], SW_SHOW);
-					//GetWindowRect(hWnd, &wr);
-					//SetWindowPos(hWnd, nullptr, 0, 0, wr.right - wr.left, 128, SWP_NOZORDER | SWP_NOMOVE);
-					//InvalidateRect(hWnd, nullptr, FALSE);
-					//while (ctx->NextTrackWindow != nullptr) {
-						//ctx = get_track_context(ctx->NextTrackWindow);
-						//GetWindowRect(ctx->TrackWindow, &wr);
-						//SetWindowPos(ctx->TrackWindow, nullptr, 0, (ctx->TrackIndex * 128) + 32, 0, 0, SWP_NOZORDER | SWP_NOSIZE);
-						//InvalidateRect(ctx->TrackWindow, nullptr, FALSE);
-					//};
-				}
+				//if (tctx->IsMinimized == FALSE) {
+					//tctx->IsMinimized = TRUE;
+				//}
+				//else {
+					//tctx->IsMinimized = FALSE;
+				//}
+				ToggleState(tctx, TRACK_STATE_MINIMIZED);
 				mctx = (MainWindowContext*)GetWindowLongPtr(GetParent(hWnd), GWLP_USERDATA);
 				reposition_all_tracks(mctx);
 			}
 			break;
 		case WM_COMMAND:
-			ctx = get_track_context(hWnd);
+			tctx = get_track_context(hWnd);
 			switch (LOWORD(wParam)) {
 			case BTN_ARM_REC:
-				ctx->state ^= TRACK_STATE_ARMED;
-				SetWindowText((HWND)lParam, ((ctx->state & TRACK_STATE_ARMED) ? L"REC" : L"Rec"));
+				//tctx->state ^= TRACK_STATE_ARMED;
+				IsArmed = ToggleState(tctx, TRACK_STATE_ARMED);
+				//SetWindowText((HWND)lParam, ((tctx->state & TRACK_STATE_ARMED) ? L"REC" : L"Rec"));
+				SetWindowText((HWND)lParam, (IsArmed ? L"REC" : L"Rec"));
 				InvalidateRect(hWnd, nullptr, FALSE);
 				break;
 			case BTN_MUTE_TRACK:
-				ctx->state ^= TRACK_STATE_MUTE;
-				SetWindowText((HWND)lParam, ((ctx->state & TRACK_STATE_MUTE) ? L"MUTE" : L"Mute"));
+				//tctx->state ^= TRACK_STATE_MUTE;
+				IsMute = ToggleState(tctx, TRACK_STATE_MUTE);
+				//SetWindowText((HWND)lParam, ((tctx->state & TRACK_STATE_MUTE) ? L"MUTE" : L"Mute"));
+				SetWindowText((HWND)lParam, (IsMute ? L"MUTE" : L"Mute"));
 				InvalidateRect(hWnd, nullptr, FALSE);
 				break;
 			case BTN_TRACK_PROP:
-				DialogBoxParam(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDD_TRACKPROPS), hWnd, TrackPropsDialogProc, (LPARAM)ctx);
+				DialogBoxParam(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDD_TRACKPROPS), hWnd, TrackPropsDialogProc, (LPARAM)tctx);
 				break;
 			default:
 				return DefWindowProc(hWnd, message, wParam, lParam);
@@ -175,18 +166,19 @@ namespace MusicStudioCX
 			break;
 		case WM_NCDESTROY:
 			// free context
-			ctx = get_track_context(hWnd);
-			if (ctx->monobuffershort) free(ctx->monobuffershort);
-			if (ctx) free(ctx);
+			tctx = get_track_context(hWnd);
+			if (tctx->monobuffershort) free(tctx->monobuffershort);
+			if (tctx) free(tctx);
 			break;
 		case WM_PAINT:
 			DrawTrackWindow(hWnd);
 			break;
 		case WM_SIZE:
-			ctx = get_track_context(hWnd);
+			tctx = get_track_context(hWnd);
 			itemHeight = 128;
-			if (ctx != nullptr) {
-				if (TRUE == ctx->IsMinimized) itemHeight = 32;
+			if (tctx != nullptr) {
+				//if (TRUE == tctx->IsMinimized) itemHeight = 32;
+				if(TRUE == CheckState(tctx, TRACK_STATE_MINIMIZED)) itemHeight = 32;
 			}
 			SetWindowPos(hWnd, nullptr, 0, 0, LOWORD(lParam), itemHeight, SWP_NOMOVE | SWP_NOZORDER);
 			break;
@@ -219,12 +211,13 @@ namespace MusicStudioCX
 		ZeroMemory(ctx, sizeof(TrackContext));
 		mctx = (MainWindowContext*)GetWindowLongPtr(parent, GWLP_USERDATA);
 		// sixty seconds worth of samples
-		ctx->state = 0;
+		//ctx->state = 0;
+		ctx->wstate = 0;
 		ctx->InputChannelIndex = channel;
 		ctx->leftpan = 1.0f;
 		ctx->rightpan = 1.0f;
 		ctx->volume = 1.0f;
-		ctx->IsMinimized = FALSE;
+		//ctx->IsMinimized = FALSE;
 #ifdef _DEBUG
 		printf("allocating %i bytes for monobuffershort\n", SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
 		MEMORYSTATUSEX msex;

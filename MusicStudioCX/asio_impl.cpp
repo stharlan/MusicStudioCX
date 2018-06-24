@@ -3,8 +3,8 @@
 
 #define MAX24BIT 8388607
 #define MIN24BIT -8388607
-#define INT16_TO_INT24(x) ((x * 128) << 8)
-#define INT24_TO_INT16(x) ((x >> 8) / 128)
+#define INT16_TO_INT24(x) (INT32)((x * 128) << 8)
+#define INT24_TO_INT16(x) (INT16)((x >> 8) / 128)
 
 namespace CXASIO {
 
@@ -145,7 +145,74 @@ namespace CXASIO {
 	RTA_DATA_HANDLER g_pHandler = nullptr;
 	HANDLER_CONTEXT g_hctx;
 	FRAME2CHSHORT* g_TransferRenderBuffer2Ch;
-	FRAME2CHSHORT* g_TransferCaptureBufferNCh;
+	short* g_TransferCaptureBufferNCh;
+
+	void OnBufferSwitchCapture(long doubleBufferIndex, ASIOBool directProcess)
+	{
+		LARGE_INTEGER ctr;
+		LONGLONG totalelps = 0;
+		BOOL Cancel = FALSE;
+		ASIOBufferInfo* pInputBuffer = g_BufferInfo;
+		ASIOBufferInfo* pOutputBuffer = g_BufferInfo + g_numInputChannels;
+		INT32* i32outputch0 = (INT32*)pOutputBuffer[0].buffers[doubleBufferIndex];
+		INT32* i32outputch1 = (INT32*)pOutputBuffer[1].buffers[doubleBufferIndex];
+		HANDLER_CONTEXT hctx;
+		short temp = 0;
+		short sval = 0;
+
+		QueryPerformanceCounter(&ctr);
+		totalelps = ctr.QuadPart - g_pLast.QuadPart;
+
+#ifdef _DEBUG
+		printf("elapsed %8lli counts; %4lli ms; frames %i; ", totalelps,
+			(ctr.QuadPart - g_pLast.QuadPart) * 1000 / g_pfreq.QuadPart,
+			g_PreferredBufferSizeSamples);
+#endif
+		g_pLast = ctr;
+
+		// translate captured data to transfer buffer
+		temp = 0;
+		for (long channel = 0; channel < g_numInputChannels; channel++) {
+			INT32* i32inputchN = (INT32*)pInputBuffer[channel].buffers[doubleBufferIndex];
+			// need to do some bit twiddling here 
+			// need to convert from short to 24-bit integer
+			//i32outputch0[frame] = INT16_TO_INT24(g_TransferRenderBuffer2Ch[frame].channel[0]);
+			//i32outputch1[frame] = INT16_TO_INT24(g_TransferRenderBuffer2Ch[frame].channel[1]);
+			for (long frame = 0; frame < g_PreferredBufferSizeSamples; frame++) {
+				// samples * channels
+				sval = INT24_TO_INT16(i32inputchN[frame]);
+				g_TransferCaptureBufferNCh[(frame * g_numInputChannels) + channel] = sval;
+				if (channel == 0 && sval > temp) temp = sval;
+			}
+		}
+
+		ZeroMemory(g_TransferRenderBuffer2Ch, g_PreferredBufferSizeSamples * sizeof(FRAME2CHSHORT));
+		hctx.audioDeviceType = AudioDeviceType::AUDIO_DEVICE_ASIO;
+		hctx.CapturedDataBuffer = (BYTE*)g_TransferCaptureBufferNCh;
+		hctx.DataToRenderBuffer = (BYTE*)g_TransferRenderBuffer2Ch;
+		hctx.frameCount = g_PreferredBufferSizeSamples;
+		hctx.LastFrameCounts[0] = hctx.LastFrameCounts[1] = hctx.LastFrameCounts[2] = 0;
+		g_pHandler(&hctx, &Cancel);
+
+		// convert short buffer to asio
+		for (long frame = 0; frame < g_PreferredBufferSizeSamples; frame++) {
+			// need to do some bit twiddling here 
+			// need to convert from short to 24-bit integer
+			i32outputch0[frame] = INT16_TO_INT24(g_TransferRenderBuffer2Ch[frame].channel[0]);
+			i32outputch1[frame] = INT16_TO_INT24(g_TransferRenderBuffer2Ch[frame].channel[1]);
+		}
+
+		if (TRUE == Cancel) SetEvent(g_hQuit);
+
+		// print elapsed stats
+		LARGE_INTEGER elps;
+		QueryPerformanceCounter(&elps);
+		LONGLONG procelps = elps.QuadPart - ctr.QuadPart;
+#ifdef _DEBUG
+		printf("elps %8lli; over %i; maxch1 %i\n", procelps, (procelps > totalelps ? 1 : 0), temp);
+#endif
+
+	}
 
 	void OnBufferSwitchRender(long doubleBufferIndex, ASIOBool directProcess)
 	{
@@ -179,7 +246,7 @@ namespace CXASIO {
 		g_pHandler(&hctx, &Cancel);
 
 		// convert short buffer to asio
-		for (UINT32 frame = 0; frame < g_PreferredBufferSizeSamples; frame++) {
+		for (long frame = 0; frame < g_PreferredBufferSizeSamples; frame++) {
 			// need to do some bit twiddling here 
 			// need to convert from short to 24-bit integer
 			i32outputch0[frame] = INT16_TO_INT24(g_TransferRenderBuffer2Ch[frame].channel[0]);
@@ -433,7 +500,7 @@ namespace CXASIO {
 		if (TRUE == IsRecording) {
 			// this is a N channel short buffer
 			TotalChannels += g_numInputChannels;
-			g_TransferCaptureBufferNCh = (FRAME2CHSHORT*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
+			g_TransferCaptureBufferNCh = (short*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
 				g_PreferredBufferSizeSamples * sizeof(short) * g_numInputChannels);
 			ZeroMemory(g_TransferCaptureBufferNCh, g_PreferredBufferSizeSamples * sizeof(short) * g_numInputChannels);
 		}
@@ -486,7 +553,12 @@ namespace CXASIO {
 
 		ASIOCallbacks callbacks;
 		callbacks.asioMessage = OnAsioMessage;
-		callbacks.bufferSwitch = OnBufferSwitchRender;
+		if (TRUE == IsRecording) {
+			callbacks.bufferSwitch = OnBufferSwitchCapture;
+		}
+		else {
+			callbacks.bufferSwitch = OnBufferSwitchRender;
+		}
 		callbacks.bufferSwitchTimeInfo = OnBufferSwitchTimeInfo;
 		callbacks.sampleRateDidChange = OnSampleRateDidChange;
 
