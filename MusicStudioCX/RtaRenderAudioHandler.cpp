@@ -20,11 +20,6 @@ RtaRenderAudioHandler::RtaRenderAudioHandler()
 	this->lpRenderDeviceInfo = NULL;
 	this->pHandler = NULL;
 	ZeroMemory(&this->hdlrCtx, sizeof(HANDLER_CONTEXT));
-	// for WASAPI, all channels are in the same buffer
-	// so, -1 they will all be processed at once
-	// always 16 bit signed for wasapi
-	this->hdlrCtx.ChannelIndex = -1;
-	this->hdlrCtx.fmt = CX_AUDIO_FORMAT::FMT_16_BIT_SIGNED;
 }
 
 // cleanup the audio handler
@@ -121,8 +116,9 @@ STDMETHODIMP RtaRenderAudioHandler::Invoke(IRtwqAsyncResult* pAsyncResult)
 
 		ZeroMemory(this->lpRenderDeviceInfo->FrameBufferByte, this->FrameCount * this->lpRenderDeviceInfo->SizeOfFrame);
 
-		hdlrCtx.renBuffer = this->lpRenderDeviceInfo->FrameBufferByte;
+		hdlrCtx.DataToRenderBuffer = this->lpRenderDeviceInfo->FrameBufferByte;
 		hdlrCtx.frameCount = this->FrameCount;
+		hdlrCtx.audioDeviceType = AudioDeviceType::AUDIO_DEVICE_WASAPI;
 		pHandler(&hdlrCtx, &handlerResult);
 
 		// get buffer from the render client

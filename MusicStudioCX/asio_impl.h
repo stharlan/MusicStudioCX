@@ -26,7 +26,7 @@ typedef struct {
 namespace CXASIO {
 	UINT32 asio_list_supporting_devices(ASIO_DEVICE_INFO** lppDevInfo);
 	void asio_free_device_list(ASIO_DEVICE_INFO* lpDevInfo);
-	int asio_start(ASIO_DEVICE_INFO *pDevice, RTA_DATA_HANDLER pHandler);
+	int asio_start(ASIO_DEVICE_INFO *pDevice, RTA_DATA_HANDLER pHandler, BOOL IsRecording);
 	//BOOL asio_initialize_device(ASIO_DEVICE_INFO* lpDevInfo);
 	//void asio_render_frames(ASIO_DEVICE_INFO* lpRenderDeviceInfo, RTA_DATA_HANDLER pHandler);
 	//void asio_capture_frames_rtwq();

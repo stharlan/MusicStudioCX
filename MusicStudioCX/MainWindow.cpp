@@ -179,8 +179,8 @@ namespace MusicStudioCX
 		// get data from the capBuffer and put it in the track
 
 		wchar_t msg[256];
-		FRAME2CHSHORT *CapturedDataBuffer = (FRAME2CHSHORT*)(lpHandlerContext->capBuffer);
-		FRAME2CHSHORT *RenderingDataBuffer = (FRAME2CHSHORT*)(lpHandlerContext->renBuffer);
+		FRAME2CHSHORT *CapturedDataBuffer = (FRAME2CHSHORT*)(lpHandlerContext->CapturedDataBuffer);
+		FRAME2CHSHORT *RenderingDataBuffer = (FRAME2CHSHORT*)(lpHandlerContext->DataToRenderBuffer);
 		float fval[2];
 		TrackContext* lpTrackCtx = nullptr;
 		UINT32 CaptureFrameIndexAdjusted = 0;
@@ -343,7 +343,7 @@ namespace MusicStudioCX
 	void MultiChannelRenderDataHandler(HANDLER_CONTEXT* lpHandlerContext, BOOL* lpCancel)
 	{
 		wchar_t msg[256];
-		FRAME2CHSHORT *RenderingDataBuffer = (FRAME2CHSHORT*)(lpHandlerContext->renBuffer);
+		FRAME2CHSHORT *RenderingDataBuffer = (FRAME2CHSHORT*)(lpHandlerContext->DataToRenderBuffer);
 		TrackContext* lpTrackCtx = nullptr;
 		MainWindowContext *mctx = (MainWindowContext*)GetWindowLongPtr(m_hwndMainWindow, GWLP_USERDATA);
 		// max number of output channels = 2
@@ -455,7 +455,7 @@ namespace MusicStudioCX
 			*lpCancel = TRUE;
 			return;
 		}
-		if (lpHandlerContext->renBuffer == nullptr || lpHandlerContext->frameCount < 1) {
+		if (lpHandlerContext->DataToRenderBuffer == nullptr || lpHandlerContext->frameCount < 1) {
 #ifdef _DEBUG
 			printf("ren buffer is null or frame count < 1; setting cancel\n");
 #endif
@@ -463,21 +463,7 @@ namespace MusicStudioCX
 			return;
 		}
 
-		if (lpHandlerContext->ChannelIndex > -1) {
-			// handle this as a single channel
-			//switch (lpHandlerContext->fmt) {
-			//case CX_AUDIO_FORMAT::FMT_16_BIT_SIGNED:
-				//ZeroMemory(lpHandlerContext->renBuffer, sizeof(INT16) * lpHandlerContext->frameCount);
-				//break;
-			//case CX_AUDIO_FORMAT::FMT_24_BIT_SIGNED:
-				//ZeroMemory(lpHandlerContext->renBuffer, sizeof(INT32) * lpHandlerContext->frameCount);
-				//break;
-			//}
-			return;
-		}
-		else {
-			MultiChannelRenderDataHandler(lpHandlerContext, lpCancel);
-		}
+		MultiChannelRenderDataHandler(lpHandlerContext, lpCancel);
 
 	}
 
@@ -488,7 +474,7 @@ namespace MusicStudioCX
 #ifdef _DEBUG
 		printf("ASIO_RenderThread: Waiting for CXASIO::asio_start...\n");
 #endif
-		CXASIO::asio_start(devInfo, RenderDataHandler);
+		CXASIO::asio_start(devInfo, RenderDataHandler, FALSE);
 #ifdef _DEBUG
 		printf("ASIO_RenderThread: Done.\n");
 #endif

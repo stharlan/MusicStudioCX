@@ -1,17 +1,16 @@
 #pragma once
 
-enum CX_AUDIO_FORMAT {
-	FMT_16_BIT_SIGNED,
-	FMT_24_BIT_SIGNED
+enum AudioDeviceType {
+	AUDIO_DEVICE_WASAPI,
+	AUDIO_DEVICE_ASIO
 };
 
 typedef struct {
-	BYTE* capBuffer;
-	BYTE* renBuffer;
+	BYTE* CapturedDataBuffer;
+	BYTE* DataToRenderBuffer;
 	UINT32 frameCount;
 	UINT32 LastFrameCounts[3];
-	int ChannelIndex;
-	CX_AUDIO_FORMAT fmt;
+	AudioDeviceType audioDeviceType;
 } HANDLER_CONTEXT;
 
 typedef void(*RTA_DATA_HANDLER)(HANDLER_CONTEXT* lpHandlerContext, BOOL* lpCancel);

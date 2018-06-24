@@ -23,11 +23,6 @@ RtaAudioHandler::RtaAudioHandler()
 	this->lpRenderDeviceInfo = NULL;
 	this->pHandler = NULL;
 	ZeroMemory(&this->hdlrCtx, sizeof(HANDLER_CONTEXT));
-	// for WASAPI, all channels are in the same buffer
-	// so, -1 they will all be processed at once
-	// always 16 bit signed for wasapi
-	this->hdlrCtx.ChannelIndex = -1;
-	this->hdlrCtx.fmt = CX_AUDIO_FORMAT::FMT_16_BIT_SIGNED;
 }
 
 // cleanup the audio handler
@@ -124,9 +119,10 @@ STDMETHODIMP RtaAudioHandler::Invoke(IRtwqAsyncResult* pAsyncResult)
 
 	// run data through handler
 	if (this->pHandler != NULL) {
-		hdlrCtx.capBuffer = this->lpCaptureDeviceInfo->FrameBufferByte;
-		hdlrCtx.renBuffer = this->lpRenderDeviceInfo->FrameBufferByte;
+		hdlrCtx.CapturedDataBuffer = this->lpCaptureDeviceInfo->FrameBufferByte;
+		hdlrCtx.DataToRenderBuffer = this->lpRenderDeviceInfo->FrameBufferByte;
 		hdlrCtx.frameCount = this->FrameCount;
+		hdlrCtx.audioDeviceType = AudioDeviceType::AUDIO_DEVICE_WASAPI;
 		pHandler(&hdlrCtx, &handlerResult);
 		hdlrCtx.LastFrameCounts[2] = hdlrCtx.LastFrameCounts[1];
 		hdlrCtx.LastFrameCounts[1] = hdlrCtx.LastFrameCounts[0];

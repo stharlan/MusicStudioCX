@@ -1,6 +1,11 @@
 
 #include "stdafx.h"
 
+#define MAX24BIT 8388607
+#define MIN24BIT -8388607
+#define INT16_TO_INT24(x) ((x * 128) << 8)
+#define INT24_TO_INT16(x) ((x >> 8) / 128)
+
 namespace CXASIO {
 
 	void asio_free_device_list(ASIO_DEVICE_INFO* lpDevInfo)
@@ -114,7 +119,7 @@ namespace CXASIO {
 	// AudioboxAsioTest.cpp : Defines the entry point for the console application.
 	//
 
-	HANDLE hQuit = INVALID_HANDLE_VALUE;
+	HANDLE g_hQuit = INVALID_HANDLE_VALUE;
 
 	UINT32 GetSampleByteSize(ASIOSampleType t) {
 		switch (t) {
@@ -126,124 +131,64 @@ namespace CXASIO {
 		return 0;
 	}
 
-	long minSize; // samples
-	long maxSize; // samples
-	long PrefferedBufferSizeSamples; // samples
-	long granularity;
-	ASIOChannelInfo* InputChannelInfo = NULL;
-	ASIOChannelInfo* OutputChannelInfo = NULL;
-	ASIOBufferInfo* BufferInfo = NULL;
-	long numInputChannels;
-	long numOutputChannels;
-	LARGE_INTEGER pfreq;
-	LARGE_INTEGER pLast = { 0 };
+	long g_minSize; // samples
+	long g_maxSize; // samples
+	long g_PreferredBufferSizeSamples; // samples
+	long g_granularity;
+	ASIOChannelInfo* g_InputChannelInfo = NULL;
+	ASIOChannelInfo* g_OutputChannelInfo = NULL;
+	ASIOBufferInfo* g_BufferInfo = NULL;
+	long g_numInputChannels;
+	long g_numOutputChannels;
+	LARGE_INTEGER g_pfreq;
+	LARGE_INTEGER g_pLast = { 0 };
 	RTA_DATA_HANDLER g_pHandler = nullptr;
-	HANDLER_CONTEXT hctx;
+	HANDLER_CONTEXT g_hctx;
+	FRAME2CHSHORT* g_TransferRenderBuffer2Ch;
+	FRAME2CHSHORT* g_TransferCaptureBufferNCh;
 
-	void OnBufferSwitch(long doubleBufferIndex, ASIOBool directProcess)
+	void OnBufferSwitchRender(long doubleBufferIndex, ASIOBool directProcess)
 	{
 
 		LARGE_INTEGER ctr;
+		LONGLONG totalelps = 0;
+		BOOL Cancel = FALSE;
+		//ASIOBufferInfo* pInputBuffer = g_BufferInfo;
+		//ASIOBufferInfo* pOutputBuffer = g_BufferInfo + g_numInputChannels;
+		ASIOBufferInfo* pOutputBuffer = g_BufferInfo;
+		INT32* i32outputch0 = (INT32*)pOutputBuffer[0].buffers[doubleBufferIndex];
+		INT32* i32outputch1 = (INT32*)pOutputBuffer[1].buffers[doubleBufferIndex];
+		HANDLER_CONTEXT hctx;
+
 		QueryPerformanceCounter(&ctr);
-		LONGLONG totalelps = ctr.QuadPart - pLast.QuadPart;
+		totalelps = ctr.QuadPart - g_pLast.QuadPart;
+
 #ifdef _DEBUG
-		printf("elapsed %8lli counts; %4lli ms; ", totalelps,
-			(ctr.QuadPart - pLast.QuadPart) * 1000 / pfreq.QuadPart);
+		printf("elapsed %8lli counts; %4lli ms; frames %i; ", totalelps,
+			(ctr.QuadPart - g_pLast.QuadPart) * 1000 / g_pfreq.QuadPart,
+			g_PreferredBufferSizeSamples);
 #endif
-		pLast = ctr;
+		g_pLast = ctr;
 
-		ASIOBufferInfo* pInputBuffer = BufferInfo;
-		ASIOBufferInfo* pOutputBuffer = BufferInfo + numInputChannels;
+		ZeroMemory(g_TransferRenderBuffer2Ch, g_PreferredBufferSizeSamples * sizeof(FRAME2CHSHORT));
+		hctx.audioDeviceType = AudioDeviceType::AUDIO_DEVICE_ASIO;
+		hctx.CapturedDataBuffer = nullptr;
+		hctx.DataToRenderBuffer = (BYTE*)g_TransferRenderBuffer2Ch;
+		hctx.frameCount = g_PreferredBufferSizeSamples;
+		hctx.LastFrameCounts[0] = hctx.LastFrameCounts[1] = hctx.LastFrameCounts[2] = 0;
+		g_pHandler(&hctx, &Cancel);
 
-		for (int i = 0; i < numInputChannels; i++) {
-
-			// this is for no processing - straight through
-			//memcpy(
-			//pOutputBuffers[i].buffers[doubleBufferIndex],
-			//pInputBuffer[i].buffers[doubleBufferIndex],
-			//GetSampleByteSize(InputChannelInfo[i].type) * PrefferedBufferSizeSamples);
-
-			if (InputChannelInfo[i].type == 18) {
-				// 24 bit audio signed
-				INT32* i32input = (INT32*)pInputBuffer[i].buffers[doubleBufferIndex];
-				INT32* i32output = (INT32*)pOutputBuffer[i].buffers[doubleBufferIndex];
-				//INT32 isample = 0;
-				float fsample = 0.0f;
-				float fmaxSample = 8388607.0f;
-				float fminSample = -8388607.0f;
-				//float fthreshold = fmaxSample * 0.001f;
-				//float f80pmaxSample = fmaxSample * 0.8f;
-				//INT32 peakup = 0;
-				//INT32 peakdn = 0;
-				//for (long s = 0; s < PrefferedBufferSizeSamples; s++) {
-				//isample = *(i32input + s) >> 8;
-				//if (isample > peakup) peakup = isample;
-				//if (isample < peakdn) peakdn = isample;
-				//}
-				//peakdn *= -1;
-				//INT32 peak = (peakup > peakdn ? peakup : peakdn);
-				//float ampFrom = ChannelContext[i].amplifier;
-				//float ampTo = ChannelContext[i].amplifier;
-				//if (peak > 0) {
-				//if (peak < fthreshold) {
-				//ampTo = 0.0f;
-				//}
-				//else {
-				//ampTo = f80pmaxSample / (float)peak;
-				//}
-				//}
-				//float ampStep = (ampTo - ampFrom) / (float)PrefferedBufferSizeSamples;
-				int clipping = 0;
-				for (long s = 0; s < PrefferedBufferSizeSamples; s++) {
-					fsample = (float)(*(i32input + s) >> 8);
-					//fsample = ampFrom * fsample;
-					//fsample /= peak;
-					//fsample = fsample - ((fsample * fsample * fsample) / 3.0f);
-					//fsample *= peak;
-					//ampFrom += ampStep;
-					if (fsample > fmaxSample) {
-						clipping = 1;
-						fsample = fmaxSample;
-					}
-					if (fsample < fminSample) {
-						clipping = 1;
-						fsample = fminSample;
-					}
-					*(i32output + s) = ((INT32)fsample) << 8;
-				}
-				//ChannelContext[i].amplifier = ampTo;
-				//printf(" %10i; %.1f; CLP %i; ", peak, ChannelContext[i].amplifier, clipping);
-#ifdef _DEBUG
-				printf("clipping %i; ", clipping);
-#endif
-			}
-			else if (InputChannelInfo[i].type == 16) {
-				// 16 bit audio signed short
-				INT16* i16input = (INT16*)pInputBuffer[i].buffers[doubleBufferIndex];
-				INT16* i16output = (INT16*)pOutputBuffer[i].buffers[doubleBufferIndex];
-				INT16 sample = 0;
-				//INT16 maxSample = (INT16)32767;
-				//INT16 minSample = (INT16)-32767;
-				//INT16 Amplifier = (INT16)ChannelContext[i].amplifier;
-				//INT16 maxSample1 = maxSample / AmplifierMultiplier;
-				//INT16 minSample1 = minSample / AmplifierMultiplier;
-				//ChannelContext[i].peak = 0;
-				for (long s = 0; s < PrefferedBufferSizeSamples; s++) {
-					sample = *(i16input);
-					//if (sample > maxSample1) sample = maxSample1;
-					//if (sample < minSample1) sample = minSample1;
-					//if (sample >= 0) sample += Amplifier;
-					//else sample -= Amplifier;
-					//if (sample > ChannelContext[i].peak) ChannelContext[i].peak = sample;
-					//if (sample < 0 && ((sample * -1) > ChannelContext[i].peak)) ChannelContext[i].peak = sample * -1;
-					*(i16output) = sample;
-				}
-				//ChannelContext[i].amplifier = ((maxSample / 2) - ChannelContext[i].peak) / 2;
-				//printf(" %10i; %2i; ", ChannelContext[i].peak, Amplifier);
-			}
-
+		// convert short buffer to asio
+		for (UINT32 frame = 0; frame < g_PreferredBufferSizeSamples; frame++) {
+			// need to do some bit twiddling here 
+			// need to convert from short to 24-bit integer
+			i32outputch0[frame] = INT16_TO_INT24(g_TransferRenderBuffer2Ch[frame].channel[0]);
+			i32outputch1[frame] = INT16_TO_INT24(g_TransferRenderBuffer2Ch[frame].channel[1]);
 		}
 
+		if (TRUE == Cancel) SetEvent(g_hQuit);
+
+		// print elapsed stats
 		LARGE_INTEGER elps;
 		QueryPerformanceCounter(&elps);
 		LONGLONG procelps = elps.QuadPart - ctr.QuadPart;
@@ -251,17 +196,6 @@ namespace CXASIO {
 		printf("elps %8lli; over %i\n", procelps, (procelps > totalelps ? 1 : 0));
 #endif
 
-		BOOL Cancel = FALSE;
-		for (UINT32 ch = 0; ch < numInputChannels; ch++) {
-			hctx.capBuffer = (BYTE*)pInputBuffer[ch].buffers[doubleBufferIndex];
-			hctx.ChannelIndex = ch;
-			hctx.fmt = CX_AUDIO_FORMAT::FMT_24_BIT_SIGNED;
-			hctx.frameCount = PrefferedBufferSizeSamples;
-			hctx.LastFrameCounts[0] = hctx.LastFrameCounts[1] = hctx.LastFrameCounts[2] = 0;
-			hctx.renBuffer = (BYTE*)pOutputBuffer[ch].buffers[doubleBufferIndex];
-			g_pHandler(&hctx, &Cancel);
-		}
-		if (TRUE == Cancel) SetEvent(hQuit);
 	}
 
 	void OnSampleRateDidChange(ASIOSampleRate sRate)
@@ -300,6 +234,10 @@ namespace CXASIO {
 			thisChanInfo->channel = l;
 			thisChanInfo->isInput = isInput;
 			pAsio->getChannelInfo(thisChanInfo);
+			if (thisChanInfo->type != ASIOSTInt32LSB)
+			{
+				throw;
+			}
 #ifdef _DEBUG
 			printf("\t    Channel Name: %s\n", thisChanInfo->name);
 			printf("\t    Channel Type: %i\n", thisChanInfo->type);
@@ -319,17 +257,17 @@ namespace CXASIO {
 	{
 		IASIO *pAsio = (IASIO*)lpParameter;
 		pAsio->AddRef();
-		hQuit = CreateEvent(NULL, TRUE, FALSE, NULL);
+		g_hQuit = CreateEvent(NULL, TRUE, FALSE, NULL);
 		pAsio->start();
-		WaitForSingleObject(hQuit, INFINITE);
+		WaitForSingleObject(g_hQuit, INFINITE);
 		pAsio->stop();
-		CloseHandle(hQuit);
+		CloseHandle(g_hQuit);
 		pAsio->disposeBuffers();
 		pAsio->Release();
 		return 0;
 	}
 
-	int asio_start(ASIO_DEVICE_INFO *pDevice, RTA_DATA_HANDLER pHandler)
+	int asio_start(ASIO_DEVICE_INFO *pDevice, RTA_DATA_HANDLER pHandler, BOOL IsRecording)
 	{
 
 		CLSID driverClsid;
@@ -346,6 +284,7 @@ namespace CXASIO {
 		UINT32 ChannelCounter = 0;
 		BYTE* bufferPointer = nullptr;
 		ASIOError err = 0;
+		UINT32 TotalChannels = 0;
 
 		g_pHandler = pHandler;
 
@@ -357,7 +296,7 @@ namespace CXASIO {
 			return 0;
 		}
 		
-		QueryPerformanceFrequency(&pfreq);
+		QueryPerformanceFrequency(&g_pfreq);
 
 		CoInitialize(nullptr);
 
@@ -394,17 +333,18 @@ namespace CXASIO {
 		printf("                 Driver: %s Version %i\n", DriverName, pDevice->pAsio->getDriverVersion());
 #endif
 
+		pDevice->pAsio->setSampleRate(sampleRate);
 		pDevice->pAsio->getSampleRate(&sampleRate);
 #ifdef _DEBUG
 		printf("            Sample Rate: %.0f\n", sampleRate);
 #endif
 
-		pDevice->pAsio->getBufferSize(&minSize, &maxSize, &PrefferedBufferSizeSamples, &granularity);
+		pDevice->pAsio->getBufferSize(&g_minSize, &g_maxSize, &g_PreferredBufferSizeSamples, &g_granularity);
 #ifdef _DEBUG
-		printf("        Buffer Min Size: %i\n", minSize);
-		printf("        Buffer Max Size: %i\n", maxSize);
-		printf("  Buffer Preferred Size: %i\n", PrefferedBufferSizeSamples);
-		printf("Buffer Size Granularity: %i\n", granularity);
+		printf("        Buffer Min Size: %i\n", g_minSize);
+		printf("        Buffer Max Size: %i\n", g_maxSize);
+		printf("  Buffer Preferred Size: %i\n", g_PreferredBufferSizeSamples);
+		printf("Buffer Size Granularity: %i\n", g_granularity);
 #endif
 
 		pDevice->pAsio->getClockSources(&clockSources[0], &numSources);
@@ -421,17 +361,17 @@ namespace CXASIO {
 		printf("         Output Latency: %i\n", outputLatency);
 #endif
 
-		pDevice->pAsio->getChannels(&numInputChannels, &numOutputChannels);
+		pDevice->pAsio->getChannels(&g_numInputChannels, &g_numOutputChannels);
 #ifdef _DEBUG
-		printf("     Num Input Channels: %i\n", numInputChannels);
-		printf("    Num Output Channels: %i\n", numOutputChannels);
+		printf("     Num Input Channels: %i\n", g_numInputChannels);
+		printf("    Num Output Channels: %i\n", g_numOutputChannels);
 #endif
 
-		InputChannelInfo = (ASIOChannelInfo*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
-			numInputChannels * sizeof(ASIOChannelInfo));
-		OutputChannelInfo = (ASIOChannelInfo*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
-			numOutputChannels * sizeof(ASIOChannelInfo));
-		if (InputChannelInfo == NULL || OutputChannelInfo == NULL) {
+		g_InputChannelInfo = (ASIOChannelInfo*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
+			g_numInputChannels * sizeof(ASIOChannelInfo));
+		g_OutputChannelInfo = (ASIOChannelInfo*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
+			g_numOutputChannels * sizeof(ASIOChannelInfo));
+		if (g_InputChannelInfo == NULL || g_OutputChannelInfo == NULL) {
 #ifdef _DEBUG
 			printf("ERR: Failed to allocate channel info\n");
 #endif
@@ -442,23 +382,27 @@ namespace CXASIO {
 		printf("\nInput Channels\n");
 		printf("==============\n");
 #endif
-		DumpChannelInfo(numInputChannels, pDevice->pAsio, ASIOTrue, InputChannelInfo);
+		DumpChannelInfo(g_numInputChannels, pDevice->pAsio, ASIOTrue, g_InputChannelInfo);
 
 #ifdef _DEBUG
 		printf("\nOutput Channels\n");
 		printf("==============\n");
 #endif
-		DumpChannelInfo(numInputChannels, pDevice->pAsio, ASIOFalse, OutputChannelInfo);
+		DumpChannelInfo(g_numInputChannels, pDevice->pAsio, ASIOFalse, g_OutputChannelInfo);
 
 #ifdef _DEBUG
 		printf("\nCalculating buffer size...");
 #endif
-		for (int i = 0; i < numInputChannels; i++) {
-			SizeOfBigBuffer += GetSampleByteSize(InputChannelInfo[i].type) * PrefferedBufferSizeSamples;
+
+		if (TRUE == IsRecording)
+		{
+			for (int i = 0; i < g_numInputChannels; i++) {
+				SizeOfBigBuffer += GetSampleByteSize(g_InputChannelInfo[i].type) * g_PreferredBufferSizeSamples;
+			}
 		}
 
-		for (int i = 0; i < numOutputChannels; i++) {
-			UINT32 s = GetSampleByteSize(OutputChannelInfo[i].type) * PrefferedBufferSizeSamples;
+		for (int i = 0; i < g_numOutputChannels; i++) {
+			UINT32 s = GetSampleByteSize(g_OutputChannelInfo[i].type) * g_PreferredBufferSizeSamples;
 			SizeOfBigBuffer += s;
 		}
 
@@ -479,9 +423,24 @@ namespace CXASIO {
 			goto done;
 		}
 
-		BufferInfo = (ASIOBufferInfo*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
-			(numInputChannels + numOutputChannels) * sizeof(ASIOBufferInfo));
-		if (BufferInfo == NULL) {
+		// transfer buffer
+		// this is a 2 channel short buffer
+		TotalChannels = 2;
+		g_TransferRenderBuffer2Ch = (FRAME2CHSHORT*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
+			g_PreferredBufferSizeSamples * sizeof(FRAME2CHSHORT));
+		ZeroMemory(g_TransferRenderBuffer2Ch, g_PreferredBufferSizeSamples * sizeof(FRAME2CHSHORT));
+
+		if (TRUE == IsRecording) {
+			// this is a N channel short buffer
+			TotalChannels += g_numInputChannels;
+			g_TransferCaptureBufferNCh = (FRAME2CHSHORT*)HeapAlloc(GetProcessHeap(), HEAP_ZERO_MEMORY,
+				g_PreferredBufferSizeSamples * sizeof(short) * g_numInputChannels);
+			ZeroMemory(g_TransferCaptureBufferNCh, g_PreferredBufferSizeSamples * sizeof(short) * g_numInputChannels);
+		}
+
+		g_BufferInfo = (ASIOBufferInfo*)HeapAlloc(GetProcessHeap(), 
+			HEAP_ZERO_MEMORY, TotalChannels * sizeof(ASIOBufferInfo));
+		if (g_BufferInfo == NULL) {
 #ifdef _DEBUG
 			printf("ERR: Failed to allocate buffer info\n");
 #endif
@@ -489,30 +448,33 @@ namespace CXASIO {
 		}
 
 		bufferPointer = BigBuffer;
-		for (int i = 0; i < numInputChannels; i++) {
-			// get channel info to get sample byte size
-			UINT32 AdvanceBy = GetSampleByteSize(InputChannelInfo[i].type) * PrefferedBufferSizeSamples;
 
-			// configure channel
-			BufferInfo[ChannelCounter].channelNum = i;
-			BufferInfo[ChannelCounter].isInput = ASIOTrue;
-			BufferInfo[ChannelCounter].buffers[0] = bufferPointer;
-			bufferPointer += AdvanceBy;
-			BufferInfo[ChannelCounter].buffers[1] = bufferPointer;
-			bufferPointer += AdvanceBy;
+		if (TRUE == IsRecording) {
+			for (int i = 0; i < g_numInputChannels; i++) {
+				// get channel info to get sample byte size
+				UINT32 AdvanceBy = GetSampleByteSize(g_InputChannelInfo[i].type) * g_PreferredBufferSizeSamples;
 
-			ChannelCounter++;
+				// configure channel
+				g_BufferInfo[ChannelCounter].channelNum = i;
+				g_BufferInfo[ChannelCounter].isInput = ASIOTrue;
+				g_BufferInfo[ChannelCounter].buffers[0] = bufferPointer;
+				bufferPointer += AdvanceBy;
+				g_BufferInfo[ChannelCounter].buffers[1] = bufferPointer;
+				bufferPointer += AdvanceBy;
+
+				ChannelCounter++;
+			}
 		}
-		for (int i = 0; i < numOutputChannels; i++) {
+		for (int i = 0; i < g_numOutputChannels; i++) {
 			// get channel info to get sample byte size
-			UINT32 AdvanceBy = GetSampleByteSize(OutputChannelInfo[i].type) * PrefferedBufferSizeSamples;
+			UINT32 AdvanceBy = GetSampleByteSize(g_OutputChannelInfo[i].type) * g_PreferredBufferSizeSamples;
 
 			// configure channel
-			BufferInfo[ChannelCounter].channelNum = i;
-			BufferInfo[ChannelCounter].isInput = ASIOFalse;
-			BufferInfo[ChannelCounter].buffers[0] = bufferPointer;
+			g_BufferInfo[ChannelCounter].channelNum = i;
+			g_BufferInfo[ChannelCounter].isInput = ASIOFalse;
+			g_BufferInfo[ChannelCounter].buffers[0] = bufferPointer;
 			bufferPointer += AdvanceBy;
-			BufferInfo[ChannelCounter].buffers[1] = bufferPointer;
+			g_BufferInfo[ChannelCounter].buffers[1] = bufferPointer;
 			bufferPointer += AdvanceBy;
 
 			ChannelCounter++;
@@ -524,15 +486,15 @@ namespace CXASIO {
 
 		ASIOCallbacks callbacks;
 		callbacks.asioMessage = OnAsioMessage;
-		callbacks.bufferSwitch = OnBufferSwitch;
+		callbacks.bufferSwitch = OnBufferSwitchRender;
 		callbacks.bufferSwitchTimeInfo = OnBufferSwitchTimeInfo;
 		callbacks.sampleRateDidChange = OnSampleRateDidChange;
 
 #ifdef _DEBUG
 		printf("Creating buffers...");
 #endif
-		err = pDevice->pAsio->createBuffers(BufferInfo,
-			numInputChannels + numOutputChannels, PrefferedBufferSizeSamples, &callbacks);
+		err = pDevice->pAsio->createBuffers(g_BufferInfo, TotalChannels, 
+			g_PreferredBufferSizeSamples, &callbacks);
 		if (err == ASE_NoMemory) {
 #ifdef _DEBUG
 			printf("ERROR\n");
@@ -564,17 +526,29 @@ namespace CXASIO {
 	done:
 
 		if (DriverName != NULL) free(DriverName);
+		if (g_TransferCaptureBufferNCh) {
+			HeapFree(GetProcessHeap(), 0, g_TransferCaptureBufferNCh);
+			g_TransferCaptureBufferNCh = nullptr;
+		}
+		if (g_TransferRenderBuffer2Ch) {
+			HeapFree(GetProcessHeap(), 0, g_TransferRenderBuffer2Ch);
+			g_TransferRenderBuffer2Ch = nullptr;
+		}
 		if (BigBuffer != NULL) {
 			HeapFree(GetProcessHeap(), 0, BigBuffer);
+			BigBuffer = nullptr;
 		}
-		if (InputChannelInfo != NULL) {
-			HeapFree(GetProcessHeap(), 0, InputChannelInfo);
+		if (g_InputChannelInfo != NULL) {
+			HeapFree(GetProcessHeap(), 0, g_InputChannelInfo);
+			g_InputChannelInfo = nullptr;
 		}
-		if (OutputChannelInfo != NULL) {
-			HeapFree(GetProcessHeap(), 0, OutputChannelInfo);
+		if (g_OutputChannelInfo != NULL) {
+			HeapFree(GetProcessHeap(), 0, g_OutputChannelInfo);
+			g_OutputChannelInfo = nullptr;
 		}
-		if (BufferInfo != NULL) {
-			HeapFree(GetProcessHeap(), 0, BufferInfo);
+		if (g_BufferInfo != NULL) {
+			HeapFree(GetProcessHeap(), 0, g_BufferInfo);
+			g_BufferInfo = nullptr;
 		}
 		if (pDevice->pAsio != NULL) pDevice->pAsio->Release();
 		pDevice->pAsio = nullptr;
