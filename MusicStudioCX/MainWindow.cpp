@@ -1117,6 +1117,8 @@ namespace MusicStudioCX
 		UINT32 SampleSize = sizeof(short);
 		// these are individual tracks - mono
 		UINT32 NumberOfChannels = 1;
+		wchar_t scratch[1024];
+		size_t ncc = 0;
 
 		std::wstring PropFileName(mctx->ProjectDir);
 		PropFileName.append(L"\\properties.json");
@@ -1148,6 +1150,59 @@ namespace MusicStudioCX
 				mctx->hscroll_pos = d["hscroll_pos"].GetInt();
 				mctx->vscroll_pos = d["vscroll_pos"].GetInt();
 				mctx->auto_position_timebar = d["auto_position_timebar"].GetBool();
+				if (d.HasMember("device_type")) {
+					if (strcmp(d["device_type"].GetString(), "asio") == 0) {
+						mctx->adt = AUDIO_DEVICE_TYPE::AUDIO_DEVICE_ASIO;
+					}
+					else {
+						mctx->adt = AUDIO_DEVICE_TYPE::AUDIO_DEVICE_WASAPI;
+					}
+				}
+
+				if (d.HasMember("AsioDevInfo"))
+				{
+					if (d["AsioDevInfo"].HasMember("wcClsid")) {
+						const char* AsioDevInfowcClsid = d["AsioDevInfo"]["wcClsid"].GetString();
+						for (ASIO_DEVICE_INFO* devptr = m_lpAsioDevices; devptr != nullptr; devptr = (ASIO_DEVICE_INFO*)devptr->lpvNext)
+						{
+							mbstowcs_s(&ncc, scratch, 1024, AsioDevInfowcClsid, 1023);
+							if (wcscmp(scratch, devptr->wcClsid) == 0) {
+								mctx->AsioDevInfo = devptr;
+								break;
+							}
+						}
+					}
+				}
+
+				if (d.HasMember("CaptureDevInfo"))
+				{
+					if (d["CaptureDevInfo"].HasMember("DeviceId")) {
+						const char* CaptureDevInfoDeviceId = d["CaptureDevInfo"]["DeviceId"].GetString();
+						for (RTA_DEVICE_INFO* devptr = m_lpCaptureDevices; devptr != nullptr; devptr = (RTA_DEVICE_INFO*)devptr->pNext)
+						{
+							mbstowcs_s(&ncc, scratch, 1024, CaptureDevInfoDeviceId, 1023);
+							if (wcscmp(scratch, devptr->DeviceId) == 0) {
+								mctx->CaptureDevInfo = devptr;
+								break;
+							}
+						}
+					}
+				}
+
+				if (d.HasMember("RenderDevInfo"))
+				{
+					if (d["RenderDevInfo"].HasMember("DeviceId")) {
+						const char* RenderDevInfoDeviceId = d["RenderDevInfo"]["DeviceId"].GetString();
+						for (RTA_DEVICE_INFO* devptr = m_lpRenderDevices; devptr != nullptr; devptr = (RTA_DEVICE_INFO*)devptr->pNext)
+						{
+							mbstowcs_s(&ncc, scratch, 1024, RenderDevInfoDeviceId, 1023);
+							if (wcscmp(scratch, devptr->DeviceId) == 0) {
+								mctx->CaptureDevInfo = devptr;
+								break;
+							}
+						}
+					}
+				}
 
 #ifdef _DEBUG
 				printf("rec time secs %i\n", mctx->rec_time_seconds);
@@ -1250,6 +1305,8 @@ namespace MusicStudioCX
 	DWORD WINAPI SaveProjectOnThread(LPVOID lpParm) {
 
 		char foo[MAX_PATH];
+		char scratch[1024];
+		size_t ncc = 0;
 		size_t ncv = 0;
 
 		MainWindowContext* mctx = (MainWindowContext*)lpParm;
@@ -1272,6 +1329,31 @@ namespace MusicStudioCX
 		writer.Int(mctx->vscroll_pos);
 		writer.String("auto_position_timebar");
 		writer.Bool(mctx->auto_position_timebar);
+		writer.String("device_type");
+		if (mctx->adt == AUDIO_DEVICE_TYPE::AUDIO_DEVICE_ASIO) {
+			writer.String("asio");
+		}
+		else {
+			writer.String("wasapi");
+		}
+		writer.String("AsioDevInfo");
+		writer.StartObject();
+		writer.String("wcClsid");
+		wcstombs_s(&ncc, scratch, 1024, mctx->AsioDevInfo->wcClsid, 1023);
+		writer.String(scratch);
+		writer.EndObject();
+		writer.String("CaptureDevInfo");
+		writer.StartObject();
+		writer.String("DeviceId");
+		wcstombs_s(&ncc, scratch, 1024, mctx->CaptureDevInfo->DeviceId, 1023);
+		writer.String(scratch);
+		writer.EndObject();
+		writer.String("RenderDevInfo");
+		writer.StartObject();
+		writer.String("DeviceId");
+		wcstombs_s(&ncc, scratch, 1024, mctx->RenderDevInfo->DeviceId, 1023);
+		writer.String(scratch);
+		writer.EndObject();
 
 		writer.String("TrackContextList");
 		writer.StartArray();
