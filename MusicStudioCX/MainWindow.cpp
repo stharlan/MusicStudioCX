@@ -1593,6 +1593,14 @@ namespace MusicStudioCX
 				// set the project dir
 				GetFolder(mctx->ProjectDir, L"Set Project Directory", hWnd);
 				break;
+			case ID_PROCESS_MAXIMIZE:
+				for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
+					if (TRUE == CheckState(mctx->TrackContextList[TrackIndex], TRACK_STATE_SELECTED)) {
+						WaveProcess::wp_maximize(mctx, mctx->TrackContextList[TrackIndex], m_hwndProgBar);
+						InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
+					}
+				}
+				break;
 			case ID_FILE_NEW:
 				// new project - reset everything
 				StartNewProject();

@@ -31,7 +31,6 @@ namespace MusicStudioCX
 		HGDIOBJ OldPen = nullptr;
 		wchar_t WindowName[16];
 
-		//if (FALSE == ctx->IsMinimized) {
 		if(FALSE == CheckState(ctx, TRACK_STATE_MINIMIZED)) {
 			HBRUSH GreenBrush = CreateSolidBrush(RGB(0, 255, 0));
 			HBRUSH RedBrush = CreateSolidBrush(RGB(255, 0, 0));
@@ -40,12 +39,10 @@ namespace MusicStudioCX
 			r1.right = WVFRM_OFFSET;
 			r1.top = 32;
 			r1.bottom = 64;
-			//FillRect(hdc, &r1, ((ctx->state & TRACK_STATE_ARMED) ? GreenBrush : RedBrush));
 			FillRect(hdc, &r1, (CheckState(ctx, TRACK_STATE_ARMED) ? GreenBrush : RedBrush));
 
 			r1.top += 32;
 			r1.bottom += 32;
-			//FillRect(hdc, &r1, ((ctx->state & TRACK_STATE_MUTE) ? GreenBrush : RedBrush));
 			FillRect(hdc, &r1, (CheckState(ctx, TRACK_STATE_MUTE) ? GreenBrush : RedBrush));
 
 			DeleteObject(GreenBrush);
@@ -56,15 +53,18 @@ namespace MusicStudioCX
 		r.left += WVFRM_OFFSET;
 
 		HBRUSH grayBrush = CreateSolidBrush(RGB(0x33, 0x33, 0x33));
+		HBRUSH gray2Brush = CreateSolidBrush(RGB(0x44, 0x44, 0x44));
 		HPEN grayPen = CreatePen(PS_SOLID, 1, RGB(0x66, 0x66, 0x66));
 		HBRUSH grayHatch = CreateHatchBrush(HS_DIAGCROSS, RGB(0x66, 0x66, 0x66));
 		HGDIOBJ oldPen1 = SelectObject(hdc, grayPen);
-		//if (TRUE == ctx->IsMinimized) {
 		if(TRUE == CheckState(ctx, TRACK_STATE_MINIMIZED)) {
 			r.bottom = 32;
 			COLORREF oldColor = SetBkColor(hdc, RGB(0x33, 0x33, 0x33));
 			FillRect(hdc, &r, grayHatch);
 			SetBkColor(hdc, oldColor);
+		}
+		else if (TRUE == CheckState(ctx, TRACK_STATE_SELECTED)) {
+			FillRect(hdc, &r, gray2Brush);
 		}
 		else {
 			FillRect(hdc, &r, grayBrush);
@@ -73,6 +73,7 @@ namespace MusicStudioCX
 		LineTo(hdc, r.right - r.left + WVFRM_OFFSET, r.bottom - 1);
 		SelectObject(hdc, oldPen1);
 		DeleteObject(grayBrush);
+		DeleteObject(gray2Brush);
 		DeleteObject(grayPen);
 		DeleteObject(grayHatch);
 
@@ -123,6 +124,8 @@ namespace MusicStudioCX
 		{
 		case WM_LBUTTONDOWN:
 			tctx = get_track_context(hWnd);
+			ToggleState(tctx, TRACK_STATE_SELECTED);
+			InvalidateRect(hWnd, nullptr, FALSE);
 			break;
 		case WM_LBUTTONDBLCLK:
 			tctx = get_track_context(hWnd);
