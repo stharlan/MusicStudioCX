@@ -18,6 +18,8 @@ namespace MusicStudioCX
 		UINT32 max_frames;
 		UINT32 hscroll_pos;
 		UINT32 vscroll_pos;
+		UINT32 sel_begin_frame;
+		UINT32 sel_end_frame;
 		BOOL auto_position_timebar;
 		TrackContext* TrackContextList[NUM_TRACKS];
 		LPRTA_DEVICE_INFO CaptureDevInfo = nullptr;

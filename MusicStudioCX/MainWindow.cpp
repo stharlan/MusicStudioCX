@@ -10,6 +10,8 @@
 #define ID_STATIC_STATUS 30006
 #define BTN_CHSTRIP 30005
 #define BTN_GOSTART 30006
+#define BTN_SELALL 30007
+#define BTN_SELNONE 30008
 
 namespace MusicStudioCX
 {
@@ -1566,6 +1568,18 @@ namespace MusicStudioCX
 			case BTN_PLAY:
 				StartPlayback();
 				break;
+			case BTN_SELALL:
+				for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
+					MusicStudioCX::SetState(mctx->TrackContextList[TrackIndex], TRACK_STATE_SELECTED);
+					InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
+				}
+				break;
+			case BTN_SELNONE:
+				for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
+					MusicStudioCX::ClearState(mctx->TrackContextList[TrackIndex], TRACK_STATE_SELECTED);
+					InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
+				}
+				break;
 			case BTN_GOSTART:
 				GoToStart(hWnd);
 				break;
@@ -1662,6 +1676,28 @@ namespace MusicStudioCX
 			m_lpRenderDevices = nullptr;
 			m_lpAsioDevices = nullptr;
 			PostQuitMessage(0);
+			break;
+		case WM_MOUSEWHEEL:
+ 			if ((short)(wParam >> 16) > 0) {
+				pos = GetScrollPos(hWnd, SB_VERT);
+				if (pos > 0) {
+					pos--;
+					SetScrollPos(hWnd, SB_VERT, pos, TRUE);
+					mctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+					mctx->vscroll_pos = pos;
+					reposition_all_tracks(mctx);
+				}
+			}
+			else {
+				pos = GetScrollPos(hWnd, SB_VERT);
+				if (pos < 15) {
+					pos++;
+					SetScrollPos(hWnd, SB_VERT, pos, TRUE);
+					mctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
+					mctx->vscroll_pos = pos;
+					reposition_all_tracks(mctx);
+				}
+			}
 			break;
 		case WM_VSCROLL:
 			mctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
@@ -1834,6 +1870,10 @@ namespace MusicStudioCX
 		CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"STOP", BTN_STOP);
 		ButtonLeft += 64;
 		CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"CHST", BTN_CHSTRIP);
+		ButtonLeft += 64;
+		CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"SELA", BTN_SELALL);
+		ButtonLeft += 64;
+		CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"SELN ", BTN_SELNONE);
 
 		// create progress bar here
 		ButtonLeft += 68;

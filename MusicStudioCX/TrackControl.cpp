@@ -80,13 +80,15 @@ namespace MusicStudioCX
 		//if (FALSE == ctx->IsMinimized) {
 		if(FALSE == CheckState(ctx, TRACK_STATE_MINIMIZED)) {
 			HPEN GreenPen = CreatePen(PS_SOLID, 1, RGB(0, 255, 0));
+			HPEN bluePen = CreatePen(PS_SOLID, 1, RGB(0x66, 0x66, 0x66));
 			OldPen = SelectObject(hdc, GreenPen);
 
 			MoveToEx(hdc, WVFRM_OFFSET, 64, nullptr);
 
 			// get scroll bar pos
-			float pos = (float)mctx->hscroll_pos;
-			UINT32 StartFrame = (UINT32)((pos / 65535.0f) * (float)mctx->max_frames);
+			//float pos = (float)mctx->hscroll_pos;
+			//UINT32 StartFrame = (UINT32)((pos / 65535.0f) * (float)mctx->max_frames);
+			UINT32 StartFrame = MulDiv(mctx->hscroll_pos, mctx->max_frames, 65535);
 			UINT32 rpos = 0;
 			UINT32 RightLimit = (UINT32)r.right;
 			for (UINT32 FrameCount = StartFrame; FrameCount < mctx->max_frames; FrameCount += mctx->zoom_mult) {
@@ -94,8 +96,22 @@ namespace MusicStudioCX
 				if (rpos > RightLimit) break;
 				LineTo(hdc, rpos, (ctx->monobuffershort[FrameCount] / 512) + 64);
 			}
+			if (mctx->sel_begin_frame > StartFrame) {
+				rpos = (mctx->sel_begin_frame - StartFrame) / mctx->zoom_mult + WVFRM_OFFSET;
+				if (rpos < RightLimit) {
+					SelectObject(hdc, bluePen);
+					MoveToEx(hdc, rpos, 0, nullptr);
+					if (TRUE == CheckState(ctx, TRACK_STATE_MINIMIZED)) {
+						LineTo(hdc, rpos, 32);
+					}
+					else {
+						LineTo(hdc, rpos, r.bottom);
+					}
+				}
+			}
 			SelectObject(hdc, OldPen);
 			DeleteObject(GreenPen);
+			DeleteObject(bluePen);
 		}
 
 		ZeroMemory(WindowName, 16 * sizeof(wchar_t));
@@ -125,7 +141,17 @@ namespace MusicStudioCX
 		case WM_LBUTTONDOWN:
 			tctx = get_track_context(hWnd);
 			ToggleState(tctx, TRACK_STATE_SELECTED);
-			InvalidateRect(hWnd, nullptr, FALSE);
+			mctx = (MainWindowContext*)GetWindowLongPtr(GetParent(hWnd), GWLP_USERDATA);
+			mctx->sel_begin_frame =
+				MulDiv(mctx->hscroll_pos, mctx->max_frames, 65535) +
+				((GET_X_LPARAM(lParam) - WVFRM_OFFSET) * mctx->zoom_mult);
+			mctx->sel_end_frame = 0;
+			for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
+				InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
+			}
+#ifdef _DEBUG
+			printf("frame is %i\n", mctx->sel_begin_frame);
+#endif
 			break;
 		case WM_LBUTTONDBLCLK:
 			tctx = get_track_context(hWnd);
