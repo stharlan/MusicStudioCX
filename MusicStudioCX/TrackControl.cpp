@@ -75,7 +75,6 @@ namespace MusicStudioCX
 		DeleteObject(grayBrush);
 		DeleteObject(gray2Brush);
 		DeleteObject(grayPen);
-		DeleteObject(grayHatch);
 
 		//if (FALSE == ctx->IsMinimized) {
 		if(FALSE == CheckState(ctx, TRACK_STATE_MINIMIZED)) {
@@ -89,23 +88,47 @@ namespace MusicStudioCX
 			//float pos = (float)mctx->hscroll_pos;
 			//UINT32 StartFrame = (UINT32)((pos / 65535.0f) * (float)mctx->max_frames);
 			UINT32 StartFrame = MulDiv(mctx->hscroll_pos, mctx->max_frames, 65535);
-			UINT32 rpos = 0;
+			UINT32 rpos1 = 0;
+			UINT32 rpos2 = 0;
 			UINT32 RightLimit = (UINT32)r.right;
 			for (UINT32 FrameCount = StartFrame; FrameCount < mctx->max_frames; FrameCount += mctx->zoom_mult) {
-				rpos = (FrameCount - StartFrame) / mctx->zoom_mult + WVFRM_OFFSET;
-				if (rpos > RightLimit) break;
-				LineTo(hdc, rpos, (ctx->monobuffershort[FrameCount] / 512) + 64);
+				rpos1 = (FrameCount - StartFrame) / mctx->zoom_mult + WVFRM_OFFSET;
+				if (rpos1 > RightLimit) break;
+				LineTo(hdc, rpos1, (ctx->monobuffershort[FrameCount] / 512) + 64);
 			}
 			if (mctx->sel_begin_frame > StartFrame) {
-				rpos = (mctx->sel_begin_frame - StartFrame) / mctx->zoom_mult + WVFRM_OFFSET;
-				if (rpos < RightLimit) {
+				rpos1 = (mctx->sel_begin_frame - StartFrame) / mctx->zoom_mult + WVFRM_OFFSET;
+				if (rpos1 < RightLimit) {
 					SelectObject(hdc, bluePen);
-					MoveToEx(hdc, rpos, 0, nullptr);
+					MoveToEx(hdc, rpos1, 0, nullptr);
 					if (TRUE == CheckState(ctx, TRACK_STATE_MINIMIZED)) {
-						LineTo(hdc, rpos, 32);
+						LineTo(hdc, rpos1, 32);
 					}
 					else {
-						LineTo(hdc, rpos, r.bottom);
+						LineTo(hdc, rpos1, r.bottom);
+					}
+				}
+				if (mctx->sel_end_frame > mctx->sel_begin_frame) {
+					rpos2 = (mctx->sel_end_frame - StartFrame) / mctx->zoom_mult + WVFRM_OFFSET;
+					if (rpos2 < RightLimit) {
+						SelectObject(hdc, bluePen);
+						MoveToEx(hdc, rpos2, 0, nullptr);
+						if (TRUE == CheckState(ctx, TRACK_STATE_MINIMIZED)) {
+							LineTo(hdc, rpos2, 32);
+							int oldMode = SetBkMode(hdc, TRANSPARENT);
+							HGDIOBJ oldBrush = SelectObject(hdc, (HGDIOBJ)grayHatch);
+							Rectangle(hdc, rpos1, 0, rpos2, 32);
+							SetBkMode(hdc, oldMode);
+							SelectObject(hdc, oldBrush);
+						}
+						else {
+							LineTo(hdc, rpos2, r.bottom);
+							int oldMode = SetBkMode(hdc, TRANSPARENT);
+							HGDIOBJ oldBrush = SelectObject(hdc, (HGDIOBJ)grayHatch);
+							Rectangle(hdc, rpos1, 0, rpos2, r.bottom);
+							SetBkMode(hdc, oldMode);
+							SelectObject(hdc, oldBrush);
+						}
 					}
 				}
 			}
@@ -113,6 +136,8 @@ namespace MusicStudioCX
 			DeleteObject(GreenPen);
 			DeleteObject(bluePen);
 		}
+
+		DeleteObject(grayHatch);
 
 		ZeroMemory(WindowName, 16 * sizeof(wchar_t));
 		GetWindowText(hWnd, WindowName, 16);
@@ -138,20 +163,35 @@ namespace MusicStudioCX
 		BOOL IsMute = FALSE;
 		switch (message)
 		{
+		case WM_RBUTTONDOWN:
+			if (GET_X_LPARAM(lParam) >= WVFRM_OFFSET) {
+				mctx = (MainWindowContext*)GetWindowLongPtr(GetParent(hWnd), GWLP_USERDATA);
+				mctx->sel_end_frame =
+					MulDiv(mctx->hscroll_pos, mctx->max_frames, 65535) +
+					((GET_X_LPARAM(lParam) - WVFRM_OFFSET) * mctx->zoom_mult);
+				for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
+					InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
+				}
+#ifdef _DEBUG
+				printf("frame is %i\n", mctx->sel_begin_frame);
+#endif
+			}
+			break;
 		case WM_LBUTTONDOWN:
 			tctx = get_track_context(hWnd);
 			ToggleState(tctx, TRACK_STATE_SELECTED);
-			mctx = (MainWindowContext*)GetWindowLongPtr(GetParent(hWnd), GWLP_USERDATA);
-			mctx->sel_begin_frame =
-				MulDiv(mctx->hscroll_pos, mctx->max_frames, 65535) +
-				((GET_X_LPARAM(lParam) - WVFRM_OFFSET) * mctx->zoom_mult);
-			mctx->sel_end_frame = 0;
-			for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
-				InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
-			}
+			if (GET_X_LPARAM(lParam) >= WVFRM_OFFSET) {
+				mctx = (MainWindowContext*)GetWindowLongPtr(GetParent(hWnd), GWLP_USERDATA);
+				mctx->sel_begin_frame =
+					MulDiv(mctx->hscroll_pos, mctx->max_frames, 65535) +
+					((GET_X_LPARAM(lParam) - WVFRM_OFFSET) * mctx->zoom_mult);
+				for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
+					InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
+				}
 #ifdef _DEBUG
-			printf("frame is %i\n", mctx->sel_begin_frame);
+				printf("frame is %i\n", mctx->sel_begin_frame);
 #endif
+			}
 			break;
 		case WM_LBUTTONDBLCLK:
 			tctx = get_track_context(hWnd);
