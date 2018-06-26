@@ -103,7 +103,7 @@ namespace MusicStudioCX
 	void CreateRebarControl(HWND hwndOwner)
 	{
 		HWND hWndToolbar = CreateWindowEx(0, TOOLBARCLASSNAME, NULL,
-			WS_CHILD | TBSTYLE_WRAPABLE, 0, 0, 0, 0,
+			WS_CHILD | TBSTYLE_WRAPABLE | TBSTYLE_FLAT, 0, 0, 0, 0,
 			hwndOwner, NULL, GetModuleHandle(nullptr), NULL);
 
 		HIMAGELIST hImageList = ImageList_LoadBitmap(
@@ -115,20 +115,36 @@ namespace MusicStudioCX
 			(WPARAM)TB_IMG_LIST,
 			(LPARAM)hImageList);
 
-		TBBUTTON tbButtons[3] =
+		TBBUTTON tbButtons[9] =
 		{
-			{ 0, TB_BTN1, 0, 0,{ 0 }, 0, (INT_PTR)L"One" },
-			{ 1, TB_BTN2, 0, 0,{ 0 }, 0, (INT_PTR)L"Two" },
-			{ 2, TB_BTN3, 0, 0,{ 0 }, 0, (INT_PTR)L"Thr" }
+			{ 0, BTN_ZOOM_IN, TBSTATE_ENABLED, 0,{ 0 }, 0, (INT_PTR)nullptr },
+			{ 1, BTN_ZOOM_OUT, TBSTATE_ENABLED, 0,{ 0 }, 0, (INT_PTR)nullptr },
+			{ 2, BTN_GOSTART, TBSTATE_ENABLED, 0,{ 0 }, 0, (INT_PTR)nullptr },
+			{ 3, BTN_PLAY, TBSTATE_ENABLED, 0,{ 0 }, 0, (INT_PTR)nullptr },
+			{ 4, BTN_REC, TBSTATE_ENABLED, 0,{ 0 }, 0, (INT_PTR)nullptr },
+			{ 5, BTN_STOP, TBSTATE_ENABLED, 0,{ 0 }, 0, (INT_PTR)nullptr },
+			{ 6, BTN_CHSTRIP, TBSTATE_ENABLED, 0,{ 0 }, 0, (INT_PTR)nullptr },
+			{ 7, BTN_SELALL, TBSTATE_ENABLED, 0,{ 0 }, 0, (INT_PTR)nullptr },
+			{ 8, BTN_SELNONE, TBSTATE_ENABLED, 0,{ 0 }, 0, (INT_PTR)nullptr }
 		};
+
+		//CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"CHST", BTN_CHSTRIP);
+		//ButtonLeft += 64;
+		//CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"SELA", BTN_SELALL);
+		//ButtonLeft += 64;
+		//CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"SELN ", BTN_SELNONE);
 
 		// Add buttons.
 		SendMessage(hWndToolbar, TB_BUTTONSTRUCTSIZE, (WPARAM)sizeof(TBBUTTON), 0);
-		SendMessage(hWndToolbar, TB_ADDBUTTONS, (WPARAM)3, (LPARAM)&tbButtons);
+		SendMessage(hWndToolbar, TB_ADDBUTTONS, (WPARAM)9, (LPARAM)&tbButtons);
 
 		// Resize the toolbar, and then show it.
 		SendMessage(hWndToolbar, TB_AUTOSIZE, 0, 0);
 		ShowWindow(hWndToolbar, TRUE);
+
+		RECT r;
+		GetWindowRect(hWndToolbar, &r);
+		printf("height = %i\n", r.bottom - r.top);
 
 		// Initialize common controls.
 		//INITCOMMONCONTROLSEX icex;
@@ -1912,37 +1928,37 @@ namespace MusicStudioCX
 			CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
 		//CreateStatusBar(hwndMainWindow);
 
-		UINT32 ButtonLeft = 0;
-		CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"ZIN", BTN_ZOOM_IN);
-		ButtonLeft += 64;
-		CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"ZOUT", BTN_ZOOM_OUT);
-		ButtonLeft += 64;
-		CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L" |< ", BTN_GOSTART);
-		ButtonLeft += 64;
-		CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"PLAY", BTN_PLAY);
-		ButtonLeft += 64;
-		CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"RCRD", BTN_REC);
-		ButtonLeft += 64;
-		CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"STOP", BTN_STOP);
-		ButtonLeft += 64;
-		CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"CHST", BTN_CHSTRIP);
-		ButtonLeft += 64;
-		CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"SELA", BTN_SELALL);
-		ButtonLeft += 64;
-		CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"SELN ", BTN_SELNONE);
+		//UINT32 ButtonLeft = 0;
+		//CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"ZIN", BTN_ZOOM_IN);
+		//ButtonLeft += 64;
+		//CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"ZOUT", BTN_ZOOM_OUT);
+		//ButtonLeft += 64;
+		//CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L" |< ", BTN_GOSTART);
+		//ButtonLeft += 64;
+		//CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"PLAY", BTN_PLAY);
+		//ButtonLeft += 64;
+		//CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"RCRD", BTN_REC);
+		//ButtonLeft += 64;
+		//CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"STOP", BTN_STOP);
+		//ButtonLeft += 64;
+		//CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"CHST", BTN_CHSTRIP);
+		//ButtonLeft += 64;
+		//CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"SELA", BTN_SELALL);
+		//ButtonLeft += 64;
+		//CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"SELN ", BTN_SELNONE);
 
 		// create progress bar here
-		ButtonLeft += 68;
-		m_hwndProgBar = CreateWindowEx(0, L"msctls_progress32", nullptr, WS_CHILD | WS_VISIBLE, ButtonLeft, 8, 200, 16,
-			m_hwndMainWindow, (HMENU)ID_SB_PROGRESS_BAR, GetModuleHandle(nullptr), nullptr);
-		SendMessage(m_hwndProgBar, PBM_SETSTEP, (WPARAM)1, 0);
-		SendMessage(m_hwndProgBar, PBM_SETRANGE, 0, MAKELONG(0,100));
+		//ButtonLeft += 68;
+		//m_hwndProgBar = CreateWindowEx(0, L"msctls_progress32", nullptr, WS_CHILD | WS_VISIBLE, ButtonLeft, 8, 200, 16,
+			//m_hwndMainWindow, (HMENU)ID_SB_PROGRESS_BAR, GetModuleHandle(nullptr), nullptr);
+		//SendMessage(m_hwndProgBar, PBM_SETSTEP, (WPARAM)1, 0);
+		//SendMessage(m_hwndProgBar, PBM_SETRANGE, 0, MAKELONG(0,100));
 
 		// create label here
-		ButtonLeft += 204;
-		m_hwndStaticStatus = CreateWindow(L"STATIC", nullptr, WS_CHILD | WS_VISIBLE, ButtonLeft, 8, 200, 16,
-			m_hwndMainWindow, (HMENU)ID_STATIC_STATUS, GetModuleHandle(nullptr), nullptr);
-		SetWindowText(m_hwndStaticStatus, L"Ready");
+		//ButtonLeft += 204;
+		//m_hwndStaticStatus = CreateWindow(L"STATIC", nullptr, WS_CHILD | WS_VISIBLE, ButtonLeft, 8, 200, 16,
+			//m_hwndMainWindow, (HMENU)ID_STATIC_STATUS, GetModuleHandle(nullptr), nullptr);
+		//SetWindowText(m_hwndStaticStatus, L"Ready");
 
 		// set scroll bar info
 		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(m_hwndMainWindow, GWLP_USERDATA);
