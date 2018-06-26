@@ -12,6 +12,11 @@
 #define BTN_GOSTART 30006
 #define BTN_SELALL 30007
 #define BTN_SELNONE 30008
+#define TB_IMG_LIST 30009
+
+#define TB_BTN1 30010
+#define TB_BTN2 30011
+#define TB_BTN3 30012
 
 namespace MusicStudioCX
 {
@@ -94,6 +99,57 @@ namespace MusicStudioCX
 		
 	}
 	*/
+
+	void CreateRebarControl(HWND hwndOwner)
+	{
+		HWND hWndToolbar = CreateWindowEx(0, TOOLBARCLASSNAME, NULL,
+			WS_CHILD | TBSTYLE_WRAPABLE, 0, 0, 0, 0,
+			hwndOwner, NULL, GetModuleHandle(nullptr), NULL);
+
+		HIMAGELIST hImageList = ImageList_LoadBitmap(
+			GetModuleHandle(nullptr), MAKEINTRESOURCE(IDB_BITMAP1), 16, 0, 
+			RGB(255,255,255));
+
+		// Set the image list.
+		SendMessage(hWndToolbar, TB_SETIMAGELIST,
+			(WPARAM)TB_IMG_LIST,
+			(LPARAM)hImageList);
+
+		TBBUTTON tbButtons[3] =
+		{
+			{ 0, TB_BTN1, 0, 0,{ 0 }, 0, (INT_PTR)L"One" },
+			{ 1, TB_BTN2, 0, 0,{ 0 }, 0, (INT_PTR)L"Two" },
+			{ 2, TB_BTN3, 0, 0,{ 0 }, 0, (INT_PTR)L"Thr" }
+		};
+
+		// Add buttons.
+		SendMessage(hWndToolbar, TB_BUTTONSTRUCTSIZE, (WPARAM)sizeof(TBBUTTON), 0);
+		SendMessage(hWndToolbar, TB_ADDBUTTONS, (WPARAM)3, (LPARAM)&tbButtons);
+
+		// Resize the toolbar, and then show it.
+		SendMessage(hWndToolbar, TB_AUTOSIZE, 0, 0);
+		ShowWindow(hWndToolbar, TRUE);
+
+		// Initialize common controls.
+		//INITCOMMONCONTROLSEX icex;
+		//icex.dwSize = sizeof(INITCOMMONCONTROLSEX);
+		//icex.dwICC = ICC_COOL_CLASSES | ICC_BAR_CLASSES;
+		//InitCommonControlsEx(&icex);
+
+		// Create the rebar.
+		//HWND hwndRebar = CreateWindowEx(WS_EX_TOOLWINDOW,
+			//REBARCLASSNAME,
+			//NULL,
+			//WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS |
+			//WS_CLIPCHILDREN | RBS_VARHEIGHT |
+			//CCS_NODIVIDER | RBS_BANDBORDERS,
+			//0, 0, 0, 0,
+			//hwndOwner,
+			//NULL,
+			//GetModuleHandle(nullptr), // global instance handle
+			//NULL);
+
+	}
 
 	void StartNewProject()
 	{
@@ -1939,6 +1995,8 @@ namespace MusicStudioCX
 
 		//ctx = MusicStudioCX::create_track_window_a(hwndMainWindow, L"Track2", 1);
 		//generate_sine(329.628f, mctx->rec_time_seconds, ctx->monobuffershort, 0.5f);
+
+		CreateRebarControl(m_hwndMainWindow);
 
 		return m_hwndMainWindow;
 	}

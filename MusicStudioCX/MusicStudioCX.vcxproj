@@ -190,6 +190,7 @@
   <ItemGroup>
     <Image Include="MusicStudioCX.ico" />
     <Image Include="small.ico" />
+    <Image Include="tbpic.bmp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

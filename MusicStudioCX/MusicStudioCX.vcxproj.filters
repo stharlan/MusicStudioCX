@@ -105,5 +105,8 @@
     <Image Include="MusicStudioCX.ico">
       <Filter>Resource Files</Filter>
     </Image>
+    <Image Include="tbpic.bmp">
+      <Filter>Resource Files</Filter>
+    </Image>
   </ItemGroup>
 </Project>
