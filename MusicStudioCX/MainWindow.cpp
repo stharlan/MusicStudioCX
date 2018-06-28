@@ -1608,6 +1608,41 @@ namespace MusicStudioCX
 		// if one source track, just mix to selected tracks at sel begin
 		// if multiple source tracks, copy mix and mix to selected tracks at sel begin
 		// check for clipping
+		if (CopyFromTrack > 0 && CopyFromEndFrame > CopyFromStartFrame) {
+
+			UINT32 NumFramesCopy = CopyFromEndFrame - CopyFromStartFrame;
+
+			short* source = (short*)malloc(NumFramesCopy * sizeof(short));
+			ZeroMemory(source, NumFramesCopy * sizeof(short));
+
+			MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(mwnd, GWLP_USERDATA);
+			for (UINT32 frame = CopyFromStartFrame; frame < CopyFromEndFrame; frame++) {
+				float fval = 0.0f;
+				for (UINT32 ti = 0; ti < NUM_TRACKS; ti++) {
+					if (TRUE == CHECK_BIT(CopyFromTrack, ti)) {
+						fval += (float)mctx->TrackContextList[ti]->monobuffershort[frame];
+					}
+				}
+				CLAMP(fval, (float)SHRT_MIN, (float)SHRT_MAX);
+				source[frame - CopyFromStartFrame] = (short)fval;
+			}
+
+			// if one source track, just copy to selected tracks at sel begin
+			// if multiple source tracks, copy mix to selected tracks at sel begin
+			for (UINT32 frame = CopyFromStartFrame; frame < CopyFromEndFrame; frame++) {
+				for (UINT32 ti = 0; ti < NUM_TRACKS; ti++) {
+					if (TRUE == CheckState(mctx->TrackContextList[ti], TRACK_STATE_SELECTED)) {
+						UINT32 sourceFrame = frame - CopyFromStartFrame;
+						UINT32 targetFrame = mctx->sel_begin_frame + sourceFrame;
+						if (mctx->sel_begin_frame < mctx->max_frames) {
+							float fval = mctx->TrackContextList[ti]->monobuffershort[targetFrame] + source[sourceFrame];
+							CLAMP(fval, (float)SHRT_MIN, (float)SHRT_MAX);
+							mctx->TrackContextList[ti]->monobuffershort[targetFrame] = (short)fval;
+						}
+					}
+				}
+			}
+		}
 	}
 
 	void DoPaste(HWND mwnd)
@@ -1707,6 +1742,8 @@ namespace MusicStudioCX
 				RedrawAllTracksParent(hWnd);
 				break;
 			case HOTKEY_CTRLM:
+				DoMixPaste(hWnd);
+				RedrawAllTracksParent(hWnd);
 				break;
 			}
 			break;
