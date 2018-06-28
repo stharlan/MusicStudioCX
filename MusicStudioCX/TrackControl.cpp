@@ -241,16 +241,6 @@ namespace MusicStudioCX
 			}
 			break;
 		case WM_LBUTTONDOWN:
-			if (wParam & MK_CONTROL)
-			{
-				SelectAdd(hWnd);
-			}
-			else if(wParam & MK_SHIFT) {
-				SelectRange(hWnd);
-			}
-			else {
-				SelectOnly(hWnd);
-			}
 			mctx = (MainWindowContext*)GetWindowLongPtr(GetParent(hWnd), GWLP_USERDATA);
 			if ((GET_X_LPARAM(lParam) >= WVFRM_OFFSET) && (GetKeyState(VK_MENU) < 0)) {
 				mctx->sel_begin_frame =
@@ -261,7 +251,17 @@ namespace MusicStudioCX
 #endif
 			}
 			else {
-				mctx->sel_begin_frame = mctx->sel_end_frame = 0;
+				//mctx->sel_begin_frame = mctx->sel_end_frame = 0;
+				if (wParam & MK_CONTROL)
+				{
+					SelectAdd(hWnd);
+				}
+				else if (wParam & MK_SHIFT) {
+					SelectRange(hWnd);
+				}
+				else {
+					SelectOnly(hWnd);
+				}
 			}
 			RedrawAllTracks(hWnd);
 			break;

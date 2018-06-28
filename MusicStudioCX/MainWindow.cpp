@@ -15,6 +15,7 @@
 #define TB_IMG_LIST 30009
 #define HOTKEY_CTRLC 30010
 #define HOTKEY_CTRLV 30011
+#define HOTKEY_CTRLM 30012
 
 namespace MusicStudioCX
 {
@@ -34,6 +35,12 @@ namespace MusicStudioCX
 	HWND m_hwndProgBar = nullptr;
 
 	BOOL m_TriggerStop = FALSE;
+
+	// copy/paste rules
+	// if multiple selected on copy
+	short CopyFromTrack = 0;
+	int CopyFromStartFrame = -1;
+	int CopyFromEndFrame = -1;
 
 	WAVEFORMATEX m_StandardFormatInDefault = {
 		WAVE_FORMAT_PCM,
@@ -110,6 +117,12 @@ namespace MusicStudioCX
 		{
 #ifdef _DEBUG
 			_tprintf(_T("Hotkey 'CTRL-V' registered, using MOD_NOREPEAT flag\n"));
+#endif
+		}
+		if (RegisterHotKey(hwnd, HOTKEY_CTRLM, MOD_CONTROL | MOD_NOREPEAT, 0x4d))
+		{
+#ifdef _DEBUG
+			_tprintf(_T("Hotkey 'CTRL-M' registered, using MOD_NOREPEAT flag\n"));
 #endif
 		}
 	}
@@ -1590,6 +1603,82 @@ namespace MusicStudioCX
 		RedrawTimeBar();
 	}
 
+	void DoMixPaste(HWND mwnd)
+	{
+		// if one source track, just mix to selected tracks at sel begin
+		// if multiple source tracks, copy mix and mix to selected tracks at sel begin
+		// check for clipping
+	}
+
+	void DoPaste(HWND mwnd)
+	{
+		if (CopyFromTrack > 0 && CopyFromEndFrame > CopyFromStartFrame) {
+
+			UINT32 NumFramesCopy = CopyFromEndFrame - CopyFromStartFrame;
+
+			short* source = (short*)malloc(NumFramesCopy * sizeof(short));
+			ZeroMemory(source, NumFramesCopy * sizeof(short));
+
+			MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(mwnd, GWLP_USERDATA);
+			for (UINT32 frame = CopyFromStartFrame; frame < CopyFromEndFrame; frame++) {
+				float fval = 0.0f;
+				for (UINT32 ti = 0; ti < NUM_TRACKS; ti++) {
+					if (TRUE == CHECK_BIT(CopyFromTrack, ti)) {
+						fval += (float)mctx->TrackContextList[ti]->monobuffershort[frame];
+					}
+				}
+				CLAMP(fval, (float)SHRT_MIN, (float)SHRT_MAX);
+				source[frame - CopyFromStartFrame] = (short)fval;
+			}
+
+			// if one source track, just copy to selected tracks at sel begin
+			// if multiple source tracks, copy mix to selected tracks at sel begin
+			for (UINT32 frame = CopyFromStartFrame; frame < CopyFromEndFrame; frame++) {
+				for (UINT32 ti = 0; ti < NUM_TRACKS; ti++) {
+					if (TRUE == CheckState(mctx->TrackContextList[ti], TRACK_STATE_SELECTED)) {
+						UINT32 sourceFrame = frame - CopyFromStartFrame;
+						UINT32 targetFrame = mctx->sel_begin_frame + sourceFrame;
+						if (mctx->sel_begin_frame < mctx->max_frames) {
+							mctx->TrackContextList[ti]->monobuffershort[targetFrame] = source[sourceFrame];
+						}
+					}
+				}
+			}
+		}		
+	}
+
+	void DoCopy(HWND mwnd) {
+		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(mwnd, GWLP_USERDATA);
+		CopyFromTrack = 0;
+		CopyFromStartFrame = 0;
+		CopyFromEndFrame = 0;
+		for (int i = 0; i < NUM_TRACKS; i++) {
+			if (TRUE == CheckState(mctx->TrackContextList[i], TRACK_STATE_SELECTED)) {
+				SET_BIT(CopyFromTrack, i);
+			}
+		}
+		if (CopyFromTrack > 0) {
+			if (mctx->sel_begin_frame < mctx->sel_end_frame) {
+				CopyFromStartFrame = mctx->sel_begin_frame;
+				CopyFromEndFrame = mctx->sel_end_frame;
+			}
+			else {
+				CopyFromTrack = 0;
+			}
+		}
+#ifdef _DEBUG
+		printf("copy %i, %i, %i\n", CopyFromTrack, CopyFromStartFrame, CopyFromEndFrame);
+#endif
+	}
+
+	void RedrawAllTracksParent(HWND mwnd)
+	{
+		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(mwnd, GWLP_USERDATA);
+		for (int ti = 0; ti < NUM_TRACKS; ti++) {
+			InvalidateRect(mctx->TrackContextList[ti]->TrackWindow, nullptr, FALSE);
+		}
+	}
+
 	//
 	//  FUNCTION: WndProc(HWND, UINT, WPARAM, LPARAM)
 	//
@@ -1611,10 +1700,16 @@ namespace MusicStudioCX
 		case WM_HOTKEY:
 			switch (wParam) {
 			case HOTKEY_CTRLC:
+				DoCopy(hWnd);
 				break;
 			case HOTKEY_CTRLV:
+				DoPaste(hWnd);
+				RedrawAllTracksParent(hWnd);
+				break;
+			case HOTKEY_CTRLM:
 				break;
 			}
+			break;
 		case WM_NCCREATE:
 			mctx = (MainWindowContext*)malloc(sizeof(MainWindowContext));
 			ZeroMemory(mctx, sizeof(MainWindowContext));
@@ -1668,6 +1763,7 @@ namespace MusicStudioCX
 				}
 				break;
 			case BTN_SELNONE:
+				mctx->sel_begin_frame = mctx->sel_end_frame = 0;
 				for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
 					MusicStudioCX::ClearState(mctx->TrackContextList[TrackIndex], TRACK_STATE_SELECTED);
 					InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);

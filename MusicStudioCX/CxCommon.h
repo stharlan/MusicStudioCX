@@ -1,5 +1,7 @@
 #pragma once
 
+#define CLAMP(v,l,u) v = (v < l ? l : (v > u ? u : v))
+
 enum AudioDeviceType {
 	AUDIO_DEVICE_WASAPI,
 	AUDIO_DEVICE_ASIO
