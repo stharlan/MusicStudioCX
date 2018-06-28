@@ -1836,7 +1836,8 @@ namespace MusicStudioCX
 			case ID_PROCESS_MAXIMIZE:
 				for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
 					if (TRUE == CheckState(mctx->TrackContextList[TrackIndex], TRACK_STATE_SELECTED)) {
-						WaveProcess::wp_maximize(mctx, mctx->TrackContextList[TrackIndex], m_hwndProgBar);
+						WaveProcess::wp_maximize(mctx, mctx->TrackContextList[TrackIndex], m_hwndProgBar,
+							mctx->sel_begin_frame, mctx->sel_end_frame);
 						InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
 					}
 				}
