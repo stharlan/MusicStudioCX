@@ -10,17 +10,6 @@ namespace MusicStudioCX
 
 	INT_PTR CALLBACK TrackPropsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
-	//const UINT32 TRACK_STATE_MUTE = 0x01;
-	//const UINT32 TRACK_STATE_ARMED = 0x02;
-
-	//BOOL TrackIsMute(UINT32 state) {
-		//return (state & TRACK_STATE_MUTE ? TRUE : FALSE);
-	//}
-
-	//BOOL TrackIsArmed(UINT32 state) {
-		//return (state & TRACK_STATE_ARMED ? TRUE : FALSE);
-	//}
-
 	void DrawTrackWindow(HWND hWnd)
 	{
 		PAINTSTRUCT ps;
@@ -76,7 +65,6 @@ namespace MusicStudioCX
 		DeleteObject(gray2Brush);
 		DeleteObject(grayPen);
 
-		//if (FALSE == ctx->IsMinimized) {
 		if(FALSE == CheckState(ctx, TRACK_STATE_MINIMIZED)) {
 			HPEN GreenPen = CreatePen(PS_SOLID, 1, RGB(0, 255, 0));
 			HPEN bluePen = CreatePen(PS_SOLID, 1, RGB(0x66, 0x66, 0x66));
@@ -85,8 +73,6 @@ namespace MusicStudioCX
 			MoveToEx(hdc, WVFRM_OFFSET, 64, nullptr);
 
 			// get scroll bar pos
-			//float pos = (float)mctx->hscroll_pos;
-			//UINT32 StartFrame = (UINT32)((pos / 65535.0f) * (float)mctx->max_frames);
 			UINT32 StartFrame = MulDiv(mctx->hscroll_pos, mctx->max_frames, 65535);
 			UINT32 rpos1 = 0;
 			UINT32 rpos2 = 0;
@@ -152,6 +138,85 @@ namespace MusicStudioCX
 
 	}
 
+	void RedrawAllTracks(HWND twnd) 
+	{
+		HWND hParent = GetParent(twnd);
+		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(hParent, GWLP_USERDATA);
+		for (int ti = 0; ti < NUM_TRACKS; ti++) {
+			InvalidateRect(mctx->TrackContextList[ti]->TrackWindow, nullptr, FALSE);
+		}
+	}
+
+	void SelectRange(HWND twnd)
+	{
+		int FirstSelected = -1;
+		int LastSelected = -1;
+		int ThisIndex = -1;
+		HWND hParent = GetParent(twnd);
+		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(hParent, GWLP_USERDATA);
+		for (int ti = 0; ti < NUM_TRACKS; ti++) {
+			TrackContext* tctx = mctx->TrackContextList[ti];
+			if (TRUE == CheckState(tctx, TRACK_STATE_SELECTED)) {
+				if (FirstSelected == -1) {
+					FirstSelected = ti;
+				}
+				else {
+					LastSelected = ti;
+				}
+			}
+			if (tctx->TrackWindow == twnd) ThisIndex = ti;
+		}
+
+		if (FirstSelected == -1) {
+			SetState(mctx->TrackContextList[ThisIndex], TRACK_STATE_SELECTED);
+			return;
+		}
+
+		if (LastSelected == -1) {
+			if (ThisIndex < FirstSelected) {
+				LastSelected = FirstSelected;
+				FirstSelected = ThisIndex;
+			}
+			else if(ThisIndex > FirstSelected) {
+				LastSelected = ThisIndex;
+			}
+		}
+		else {
+			if (ThisIndex < FirstSelected) FirstSelected = ThisIndex;
+			if (ThisIndex > LastSelected) LastSelected = ThisIndex;
+		}
+				
+		for (int ti = FirstSelected; ti < (LastSelected + 1); ti++) {
+			SetState(mctx->TrackContextList[ti], TRACK_STATE_SELECTED);
+		}
+	}
+
+	void SelectAdd(HWND twnd)
+	{
+		HWND hParent = GetParent(twnd);
+		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(hParent, GWLP_USERDATA);
+		for (int ti = 0; ti < NUM_TRACKS; ti++) {
+			if (mctx->TrackContextList[ti]->TrackWindow == twnd) {
+				SetState(mctx->TrackContextList[ti], TRACK_STATE_SELECTED);
+				ti = NUM_TRACKS;
+			}
+		}
+	}
+
+	void SelectOnly(HWND twnd) 
+	{
+		HWND hParent = GetParent(twnd);
+		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(hParent, GWLP_USERDATA);
+		for (int ti = 0; ti < NUM_TRACKS; ti++) {
+			if (mctx->TrackContextList[ti]->TrackWindow == twnd) {
+				SetState(mctx->TrackContextList[ti], TRACK_STATE_SELECTED);
+			}
+			else {
+				ClearState(mctx->TrackContextList[ti], TRACK_STATE_SELECTED);
+			}
+		}
+	}
+
 	LRESULT CALLBACK track_wnd_callback(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
 		TrackContext * tctx = nullptr;
@@ -164,46 +229,47 @@ namespace MusicStudioCX
 		switch (message)
 		{
 		case WM_RBUTTONDOWN:
-			if (GET_X_LPARAM(lParam) >= WVFRM_OFFSET) {
+			if ((GET_X_LPARAM(lParam) >= WVFRM_OFFSET) && (GetKeyState(VK_MENU) < 0)) {
 				mctx = (MainWindowContext*)GetWindowLongPtr(GetParent(hWnd), GWLP_USERDATA);
 				mctx->sel_end_frame =
 					MulDiv(mctx->hscroll_pos, mctx->max_frames, 65535) +
 					((GET_X_LPARAM(lParam) - WVFRM_OFFSET) * mctx->zoom_mult);
-				for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
-					InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
-				}
+				RedrawAllTracks(hWnd);
 #ifdef _DEBUG
 				printf("frame is %i\n", mctx->sel_begin_frame);
 #endif
 			}
 			break;
 		case WM_LBUTTONDOWN:
-			tctx = get_track_context(hWnd);
-			ToggleState(tctx, TRACK_STATE_SELECTED);
-			if (GET_X_LPARAM(lParam) >= WVFRM_OFFSET) {
-				mctx = (MainWindowContext*)GetWindowLongPtr(GetParent(hWnd), GWLP_USERDATA);
+			if (wParam & MK_CONTROL)
+			{
+				SelectAdd(hWnd);
+			}
+			else if(wParam & MK_SHIFT) {
+				SelectRange(hWnd);
+			}
+			else {
+				SelectOnly(hWnd);
+			}
+			mctx = (MainWindowContext*)GetWindowLongPtr(GetParent(hWnd), GWLP_USERDATA);
+			if ((GET_X_LPARAM(lParam) >= WVFRM_OFFSET) && (GetKeyState(VK_MENU) < 0)) {
 				mctx->sel_begin_frame =
 					MulDiv(mctx->hscroll_pos, mctx->max_frames, 65535) +
 					((GET_X_LPARAM(lParam) - WVFRM_OFFSET) * mctx->zoom_mult);
-				for (UINT32 TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
-					InvalidateRect(mctx->TrackContextList[TrackIndex]->TrackWindow, nullptr, FALSE);
-				}
 #ifdef _DEBUG
 				printf("frame is %i\n", mctx->sel_begin_frame);
 #endif
 			}
+			else {
+				mctx->sel_begin_frame = mctx->sel_end_frame = 0;
+			}
+			RedrawAllTracks(hWnd);
 			break;
 		case WM_LBUTTONDBLCLK:
 			tctx = get_track_context(hWnd);
 			mx = LOWORD(lParam);
 			my = HIWORD(lParam);
 			if (mx > 0 && mx < WVFRM_OFFSET && my > 0 && my < 32) {
-				//if (tctx->IsMinimized == FALSE) {
-					//tctx->IsMinimized = TRUE;
-				//}
-				//else {
-					//tctx->IsMinimized = FALSE;
-				//}
 				ToggleState(tctx, TRACK_STATE_MINIMIZED);
 				mctx = (MainWindowContext*)GetWindowLongPtr(GetParent(hWnd), GWLP_USERDATA);
 				reposition_all_tracks(mctx);
@@ -213,16 +279,12 @@ namespace MusicStudioCX
 			tctx = get_track_context(hWnd);
 			switch (LOWORD(wParam)) {
 			case BTN_ARM_REC:
-				//tctx->state ^= TRACK_STATE_ARMED;
 				IsArmed = ToggleState(tctx, TRACK_STATE_ARMED);
-				//SetWindowText((HWND)lParam, ((tctx->state & TRACK_STATE_ARMED) ? L"REC" : L"Rec"));
 				SetWindowText((HWND)lParam, (IsArmed ? L"REC" : L"Rec"));
 				InvalidateRect(hWnd, nullptr, FALSE);
 				break;
 			case BTN_MUTE_TRACK:
-				//tctx->state ^= TRACK_STATE_MUTE;
 				IsMute = ToggleState(tctx, TRACK_STATE_MUTE);
-				//SetWindowText((HWND)lParam, ((tctx->state & TRACK_STATE_MUTE) ? L"MUTE" : L"Mute"));
 				SetWindowText((HWND)lParam, (IsMute ? L"MUTE" : L"Mute"));
 				InvalidateRect(hWnd, nullptr, FALSE);
 				break;
@@ -234,7 +296,6 @@ namespace MusicStudioCX
 			}
 			break;
 		case WM_NCDESTROY:
-			// free context
 			tctx = get_track_context(hWnd);
 			if (tctx->monobuffershort) free(tctx->monobuffershort);
 			if (tctx) free(tctx);
@@ -246,7 +307,6 @@ namespace MusicStudioCX
 			tctx = get_track_context(hWnd);
 			itemHeight = 128;
 			if (tctx != nullptr) {
-				//if (TRUE == tctx->IsMinimized) itemHeight = 32;
 				if(TRUE == CheckState(tctx, TRACK_STATE_MINIMIZED)) itemHeight = 32;
 			}
 			SetWindowPos(hWnd, nullptr, 0, 0, LOWORD(lParam), itemHeight, SWP_NOMOVE | SWP_NOZORDER);
@@ -280,13 +340,11 @@ namespace MusicStudioCX
 		ZeroMemory(ctx, sizeof(TrackContext));
 		mctx = (MainWindowContext*)GetWindowLongPtr(parent, GWLP_USERDATA);
 		// sixty seconds worth of samples
-		//ctx->state = 0;
 		ctx->wstate = 0;
 		ctx->InputChannelIndex = channel;
 		ctx->leftpan = 1.0f;
 		ctx->rightpan = 1.0f;
 		ctx->volume = 1.0f;
-		//ctx->IsMinimized = FALSE;
 #ifdef _DEBUG
 		printf("allocating %i bytes for monobuffershort\n", SAMPLES_PER_SEC * sizeof(short) * mctx->rec_time_seconds);
 		MEMORYSTATUSEX msex;

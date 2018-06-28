@@ -13,10 +13,8 @@
 #define BTN_SELALL 30007
 #define BTN_SELNONE 30008
 #define TB_IMG_LIST 30009
-
-#define TB_BTN1 30010
-#define TB_BTN2 30011
-#define TB_BTN3 30012
+#define HOTKEY_CTRLC 30010
+#define HOTKEY_CTRLV 30011
 
 namespace MusicStudioCX
 {
@@ -99,6 +97,22 @@ namespace MusicStudioCX
 		
 	}
 	*/
+
+	void RegisterHotKeys(HWND hwnd)
+	{
+		if (RegisterHotKey(hwnd, HOTKEY_CTRLC, MOD_CONTROL | MOD_NOREPEAT, 0x43))
+		{
+#ifdef _DEBUG
+			_tprintf(_T("Hotkey 'CTRL-C' registered, using MOD_NOREPEAT flag\n"));
+#endif
+		}
+		if (RegisterHotKey(hwnd, HOTKEY_CTRLV, MOD_CONTROL | MOD_NOREPEAT, 0x56))
+		{
+#ifdef _DEBUG
+			_tprintf(_T("Hotkey 'CTRL-V' registered, using MOD_NOREPEAT flag\n"));
+#endif
+		}
+	}
 
 	void CreateRebarControl(HWND hwndOwner)
 	{
@@ -1594,6 +1608,13 @@ namespace MusicStudioCX
 
 		switch (message)
 		{
+		case WM_HOTKEY:
+			switch (wParam) {
+			case HOTKEY_CTRLC:
+				break;
+			case HOTKEY_CTRLV:
+				break;
+			}
 		case WM_NCCREATE:
 			mctx = (MainWindowContext*)malloc(sizeof(MainWindowContext));
 			ZeroMemory(mctx, sizeof(MainWindowContext));

@@ -33,5 +33,5 @@ namespace MusicStudioCX
 	void initialize_main_window();
 	HWND create_main_window();
 	void reposition_all_tracks(MainWindowContext* mctx);
-
+	void RegisterHotKeys(HWND hwnd);
 }
