@@ -206,7 +206,7 @@ namespace MusicStudioCX
 		mctx->rec_time_seconds = REC_TIME_SECONDS;
 		mctx->vscroll_pos = 0;
 		ZeroMemory(mctx->WavFileName, 1024 * sizeof(wchar_t));
-		mctx->zoom_mult = 256;
+		mctx->zoom_mult = 512;
 
 		for (int t = 0; t < 16; t++) {
 			TrackContext* tctx = mctx->TrackContextList[t];
@@ -901,72 +901,81 @@ namespace MusicStudioCX
 		r.bottom = 64;
 		FillRect(hdc, &r, (HBRUSH)GetStockObject(BLACK_BRUSH));
 
+		//UINT32 bpmin = 120;
+		//UINT32 bpmeas = 4;
+
 		// @1024 every 2 sec
 		UINT32 fpt = SAMPLES_PER_SEC;
-		UINT32 secMult = 1;
+
+		// muldiv of 1/2 is 120 bpmin and 4/4 time
+		// 120 bpmin / 4 bpmeas = 30 meas per min
+		// that's 1/2 meas per sec
+		UINT32 secMult = 2;
 		UINT32 secDiv = 1;
-		if (mctx->zoom_mult > 8192)
-		{
-			secMult = 30;
-		}
-		else if (mctx->zoom_mult > 4096)
-		{
-			secMult = 10;
-		}
-		else if (mctx->zoom_mult > 2048)
-		{
-			secMult = 5;
-		}
-		else if (mctx->zoom_mult > 512)
-		{
-			secMult = 2;
-		}
-		else if (mctx->zoom_mult > 128) 
-		{
-			// do nothing
-		}
-		else if (mctx->zoom_mult > 64) 
-		{
-			secDiv = 2;
-		}
-		else if (mctx->zoom_mult > 32)
-		{
-			secDiv = 5;
-		}
-		else if (mctx->zoom_mult > 16)
-		{
-			secDiv = 10;
-		}
-		else if (mctx->zoom_mult > 8)
-		{
-			secDiv = 20;
-		}
-		else if (mctx->zoom_mult > 4)
-		{
-			secDiv = 50;
-		}
-		else if (mctx->zoom_mult > 2)
-		{
-			secDiv = 100;
-		}
-		else if (mctx->zoom_mult > 1)
-		{
-			secDiv = 200;
-		}
-		else
-		{
-			secDiv = 500;
-		}
-		fpt = MulDiv(fpt, secMult, secDiv);
+
+		//if (mctx->zoom_mult > 8192)
+		//{
+		//	secMult = 30;
+		//}
+		//else if (mctx->zoom_mult > 4096)
+		//{
+		//	secMult = 10;
+		//}
+		//else if (mctx->zoom_mult > 2048)
+		//{
+		//	secMult = 5;
+		//}
+		//else if (mctx->zoom_mult > 512)
+		//{
+		//	secMult = 2;
+		//}
+		//else if (mctx->zoom_mult > 128) 
+		//{
+		//	// do nothing
+		//	// 1 second per unit
+		//}
+		//else if (mctx->zoom_mult > 64) 
+		//{
+		//	secDiv = 2;
+		//}
+		//else if (mctx->zoom_mult > 32)
+		//{
+		//	secDiv = 5;
+		//}
+		//else if (mctx->zoom_mult > 16)
+		//{
+		//	secDiv = 10;
+		//}
+		//else if (mctx->zoom_mult > 8)
+		//{
+		//	secDiv = 20;
+		//}
+		//else if (mctx->zoom_mult > 4)
+		//{
+		//	secDiv = 50;
+		//}
+		//else if (mctx->zoom_mult > 2)
+		//{
+		//	secDiv = 100;
+		//}
+		//else if (mctx->zoom_mult > 1)
+		//{
+		//	secDiv = 200;
+		//}
+		//else
+		//{
+		//	secDiv = 500;
+		//}
+		fpt = MulDiv(SAMPLES_PER_SEC, secMult, secDiv);
 
 		UINT32 StartFrame = (UINT32)((mctx->hscroll_pos / 65535.0f) * (float)mctx->max_frames);
-		UINT32 StartSecond = StartFrame / (UINT32)fpt;
-		if (StartFrame % fpt > 0) StartSecond++;
+		UINT32 StartMeasure = StartFrame / (UINT32)fpt;
+		if (StartMeasure % fpt > 0) StartMeasure++;
 
 		UINT32 TotalFrames = mctx->zoom_mult * (cr.right - WVFRM_OFFSET);
 		UINT32 EndFrame = StartFrame + TotalFrames;
-		UINT32 EndSecond = EndFrame / (UINT32)fpt;
-		EndSecond++;
+		UINT32 EndMeasure = EndFrame / (UINT32)fpt;
+		EndMeasure++;
 		
 		COLORREF oldTextColor = SetTextColor(hdc, RGB(255, 255, 255));
 		COLORREF oldBackColor = SetBkColor(hdc, RGB(0, 0, 0));
@@ -974,28 +983,31 @@ namespace MusicStudioCX
 		HGDIOBJ oldPen = SelectObject(hdc, WhitePen);
 		RECT tr;
 		
-		for (UINT32 sec = StartSecond; sec < EndSecond; sec++) {
-			UINT32 pos = (((sec * fpt) - StartFrame) / mctx->zoom_mult) + WVFRM_OFFSET;
+		for (UINT32 measure = StartMeasure; measure < EndMeasure; measure++) {
+			UINT32 pos = (((measure * fpt) - StartFrame) / mctx->zoom_mult) + WVFRM_OFFSET;
 			MoveToEx(hdc, pos, 48, nullptr);
 			LineTo(hdc, pos, 64);
 			tr.left = pos;
 			tr.right = pos + (fpt / mctx->zoom_mult);
 			tr.top = 32;
 			tr.bottom = 48;
-			float time = (float)sec * (float)secMult / (float)secDiv;
-			if (mctx->zoom_mult == 1) {
-				wsprintf(timeval, L"%if", sec * 96);
-				DrawText(hdc, timeval, (int)wcslen(timeval), &tr, DT_TOP | DT_LEFT);
-			}
-			else if (secDiv > 1) {
-				time *= 1000;
-				wsprintf(timeval, L"%ims", (int)time);
-				DrawText(hdc, timeval, (int)wcslen(timeval), &tr, DT_TOP | DT_LEFT);
-			}
-			else {
-				wsprintf(timeval, L"%is", (int)time);
-				DrawText(hdc, timeval, (int)wcslen(timeval), &tr, DT_TOP | DT_LEFT);
-			}
+			wsprintf(timeval, L"%i", measure);
+			DrawText(hdc, timeval, (int)wcslen(timeval), &tr, DT_TOP | DT_LEFT);
+			//float time = (float)sec * (float)secMult / (float)secDiv;
+			//if (mctx->zoom_mult == 1) {
+			//	wsprintf(timeval, L"%if", sec * 96);
+			//	DrawText(hdc, timeval, (int)wcslen(timeval), &tr, DT_TOP | DT_LEFT);
+			//}
+			//else if (secDiv > 1) {
+			//	time *= 1000;
+			//	wsprintf(timeval, L"%ims", (int)time);
+			//	DrawText(hdc, timeval, (int)wcslen(timeval), &tr, DT_TOP | DT_LEFT);
+			//}
+			//else {
+			//	wsprintf(timeval, L"%is", (int)time);
+			//	DrawText(hdc, timeval, (int)wcslen(timeval), &tr, DT_TOP | DT_LEFT);
+			//}
+
 		}
 
 		//for (UINT32 i = 0; i < cr.right - WVFRM_OFFSET; i++) {
@@ -1752,7 +1764,7 @@ namespace MusicStudioCX
 			ZeroMemory(mctx, sizeof(MainWindowContext));
 			mctx->rec_time_seconds = REC_TIME_SECONDS; // five minutes
 			mctx->max_frames = SAMPLES_PER_SEC * mctx->rec_time_seconds;
-			mctx->zoom_mult = 256;
+			mctx->zoom_mult = 512;
 			mctx->adt = AUDIO_DEVICE_TYPE::AUDIO_DEVICE_WASAPI;
 			SetWindowLongPtr(hWnd, GWLP_USERDATA, (LONG_PTR)mctx);
 			return TRUE;

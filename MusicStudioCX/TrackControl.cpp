@@ -82,7 +82,7 @@ namespace MusicStudioCX
 				if (rpos1 > RightLimit) break;
 				LineTo(hdc, rpos1, (ctx->monobuffershort[FrameCount] / 512) + 64);
 			}
-			if (mctx->sel_begin_frame > StartFrame) {
+			if (mctx->sel_begin_frame >= StartFrame) {
 				rpos1 = (mctx->sel_begin_frame - StartFrame) / mctx->zoom_mult + WVFRM_OFFSET;
 				if (rpos1 < RightLimit) {
 					SelectObject(hdc, bluePen);
@@ -217,6 +217,25 @@ namespace MusicStudioCX
 		}
 	}
 
+	UINT32 SnapFrameToBeat(UINT32 frame) {
+		UINT32 outFrame = frame;
+		// snap to beat
+		// 120 bpmin
+		// 2 bpsec
+		// 48000 sample per sec
+		// 24000 samples per beat
+		UINT32 rem = outFrame % 24000;
+		if (rem < 12000) {
+			// snap down
+			outFrame -= rem;
+		}
+		else {
+			// snap up
+			outFrame = outFrame - rem + 24000;
+		}
+		return outFrame;
+	}
+
 	LRESULT CALLBACK track_wnd_callback(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
 		TrackContext * tctx = nullptr;
@@ -234,6 +253,7 @@ namespace MusicStudioCX
 				mctx->sel_end_frame =
 					MulDiv(mctx->hscroll_pos, mctx->max_frames, 65535) +
 					((GET_X_LPARAM(lParam) - WVFRM_OFFSET) * mctx->zoom_mult);
+				mctx->sel_end_frame = SnapFrameToBeat(mctx->sel_end_frame);
 				RedrawAllTracks(hWnd);
 #ifdef _DEBUG
 				printf("frame is %i\n", mctx->sel_begin_frame);
@@ -246,6 +266,7 @@ namespace MusicStudioCX
 				mctx->sel_begin_frame =
 					MulDiv(mctx->hscroll_pos, mctx->max_frames, 65535) +
 					((GET_X_LPARAM(lParam) - WVFRM_OFFSET) * mctx->zoom_mult);
+				mctx->sel_begin_frame = SnapFrameToBeat(mctx->sel_begin_frame);
 #ifdef _DEBUG
 				printf("frame is %i\n", mctx->sel_begin_frame);
 #endif
