@@ -16,6 +16,7 @@
 #define HOTKEY_CTRLC 30010
 #define HOTKEY_CTRLV 30011
 #define HOTKEY_CTRLM 30012
+#define STATUS_BAR_ID 9801
 
 namespace MusicStudioCX
 {
@@ -31,10 +32,13 @@ namespace MusicStudioCX
 	LPCWSTR m_STATUS_READY = L"Ready";
 
 	HWND m_hwndMainWindow = nullptr;
-	HWND m_hwndStaticStatus = nullptr;
 	HWND m_hwndProgBar = nullptr;
+	HWND m_hwndStatusBar = nullptr;
+	HWND m_hwndToolbar = nullptr;
 
 	BOOL m_TriggerStop = FALSE;
+
+	HINSTANCE g_hInst = nullptr;
 
 	// copy/paste rules
 	// if multiple selected on copy
@@ -64,46 +68,40 @@ namespace MusicStudioCX
 
 	void RedrawTimeBar();
 
-	/*
 	void CreateStatusBar(HWND hwndParent)
 	{
 		InitCommonControls();
 
-		hwndStatus = CreateWindowEx(
+		m_hwndStatusBar = CreateWindowEx(
 			0,						// no extended styles
 			STATUSCLASSNAME,        // name of status bar class
-			(PCTSTR)NULL,           // no text when first created
-			SBARS_SIZEGRIP |        // includes a sizing grip
+			nullptr,           // no text when first created
 			WS_CHILD | WS_VISIBLE,  // creates a visible child window
 			0, 0, 0, 0,             // ignores size and position
 			hwndParent,             // handle to parent window
 			(HMENU)STATUS_BAR_ID,	// child window identifier
-			GetModuleHandle(nullptr),	// handle to application instance
+			g_hInst,	// handle to application instance
 			NULL);                  // no window creation data
 
-		int PartRight = -1;
-		SendMessage(hwndStatus, SB_SETPARTS, (WPARAM)1, (LPARAM)&PartRight);
-		SendMessage(hwndStatus, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)STATUS_READY);
-		SetWindowPos(hwndStatus, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
+		int iBarWidths[] = { 200, 408, -1 };
 
-		
-		int iBarWidths[] = { 120, 285, -1 };
-		//static HWND StatusBar, hProgressBar;
-
-		// Creating a Status Bar 
-		//hStatusBar = CreateWindowEx(NULL, STATUSCLASSNAME, NULL, WS_CHILD | WS_VISIBLE, 0, 0, 0, 0,
-		//	hwnd, (HMENU)IDD_STATUSBAR, hInst, NULL);
-		SendMessage(hwndStatus, SB_SETPARTS, 3, (LPARAM)iBarWidths);
-		SendMessage(hwndStatus, SB_SETTEXT, 0, (LPARAM)STATUS_READY);
-		//SendMessage(hStatusBar, SB_SETTEXT, 2, (LPARAM) "some text 2");
+		SendMessage(m_hwndStatusBar, SB_SETPARTS, _ARRAYSIZE(iBarWidths), (LPARAM)iBarWidths);
+		SendMessage(m_hwndStatusBar, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)L"Ready");
 
 		// Creating and place the  Progress Bar inside the StatusBar 
-		HWND hpb = CreateWindowEx(NULL, L"msctls_progress32", NULL, WS_CHILD | WS_VISIBLE, 122, 2, 163, 18,
-			hwndStatus, (HMENU)ID_SB_PROGRESS_BAR, GetModuleHandle(nullptr), NULL);
-		SendMessage(hpb, PBM_SETSTEP, (WPARAM)1, 0);
-		
+		m_hwndProgBar = CreateWindowEx(
+			0, 
+			L"msctls_progress32", 
+			nullptr, 
+			WS_CHILD | WS_VISIBLE, 
+			204, 4, 200, 16,
+			m_hwndStatusBar, 
+			(HMENU)ID_SB_PROGRESS_BAR, 
+			g_hInst, 
+			NULL);
+		SendMessage(m_hwndProgBar, PBM_SETSTEP, (WPARAM)1, 0);
+
 	}
-	*/
 
 	void RegisterHotKeys(HWND hwnd)
 	{
@@ -127,18 +125,18 @@ namespace MusicStudioCX
 		}
 	}
 
-	void CreateRebarControl(HWND hwndOwner)
+	HWND CreateToolbar(HWND hwndOwner, HINSTANCE hInst)
 	{
-		HWND hWndToolbar = CreateWindowEx(0, TOOLBARCLASSNAME, NULL,
-			WS_CHILD | TBSTYLE_WRAPABLE | TBSTYLE_FLAT, 0, 0, 0, 0,
-			hwndOwner, NULL, GetModuleHandle(nullptr), NULL);
+		m_hwndToolbar = CreateWindowEx(0, TOOLBARCLASSNAME, NULL,
+			WS_CHILD | TBSTYLE_WRAPABLE | TBSTYLE_FLAT | WS_VISIBLE, 0, 0, 0, 0,
+			hwndOwner, NULL, hInst, NULL);
 
 		HIMAGELIST hImageList = ImageList_LoadBitmap(
-			GetModuleHandle(nullptr), MAKEINTRESOURCE(IDB_BITMAP1), 16, 0, 
-			RGB(255,255,255));
+			hInst, MAKEINTRESOURCE(IDB_BITMAP1), 16, 0,
+			RGB(255, 255, 255));
 
 		// Set the image list.
-		SendMessage(hWndToolbar, TB_SETIMAGELIST,
+		SendMessage(m_hwndToolbar, TB_SETIMAGELIST,
 			(WPARAM)TB_IMG_LIST,
 			(LPARAM)hImageList);
 
@@ -155,43 +153,19 @@ namespace MusicStudioCX
 			{ 8, BTN_SELNONE, TBSTATE_ENABLED, 0,{ 0 }, 0, (INT_PTR)nullptr }
 		};
 
-		//CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"CHST", BTN_CHSTRIP);
-		//ButtonLeft += 64;
-		//CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"SELA", BTN_SELALL);
-		//ButtonLeft += 64;
-		//CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"SELN ", BTN_SELNONE);
-
 		// Add buttons.
-		SendMessage(hWndToolbar, TB_BUTTONSTRUCTSIZE, (WPARAM)sizeof(TBBUTTON), 0);
-		SendMessage(hWndToolbar, TB_ADDBUTTONS, (WPARAM)9, (LPARAM)&tbButtons);
+		SendMessage(m_hwndToolbar, TB_BUTTONSTRUCTSIZE, (WPARAM)sizeof(TBBUTTON), 0);
+		SendMessage(m_hwndToolbar, TB_ADDBUTTONS, (WPARAM)_ARRAYSIZE(tbButtons), (LPARAM)&tbButtons);
 
 		// Resize the toolbar, and then show it.
-		SendMessage(hWndToolbar, TB_AUTOSIZE, 0, 0);
-		ShowWindow(hWndToolbar, TRUE);
+		SendMessage(m_hwndToolbar, TB_AUTOSIZE, 0, 0);
 
 		RECT r;
-		GetWindowRect(hWndToolbar, &r);
-		printf("height = %i\n", r.bottom - r.top);
+		GetWindowRect(m_hwndToolbar, &r);
+		printf("toolbar height = %i\n", r.bottom - r.top);
+		printf("toolbar width = %i\n", r.right - r.left);
 
-		// Initialize common controls.
-		//INITCOMMONCONTROLSEX icex;
-		//icex.dwSize = sizeof(INITCOMMONCONTROLSEX);
-		//icex.dwICC = ICC_COOL_CLASSES | ICC_BAR_CLASSES;
-		//InitCommonControlsEx(&icex);
-
-		// Create the rebar.
-		//HWND hwndRebar = CreateWindowEx(WS_EX_TOOLWINDOW,
-			//REBARCLASSNAME,
-			//NULL,
-			//WS_CHILD | WS_VISIBLE | WS_CLIPSIBLINGS |
-			//WS_CLIPCHILDREN | RBS_VARHEIGHT |
-			//CCS_NODIVIDER | RBS_BANDBORDERS,
-			//0, 0, 0, 0,
-			//hwndOwner,
-			//NULL,
-			//GetModuleHandle(nullptr), // global instance handle
-			//NULL);
-
+		return m_hwndToolbar;
 	}
 
 	void StartNewProject()
@@ -356,7 +330,7 @@ namespace MusicStudioCX
 			mmsec = mmsec % 1000;
 			msec = msec % 60;
 			swprintf_s(msg, 256, L"%i min %i sec %i ms %i frm", mmin, msec, mmsec, mframe);
-			SetWindowText(m_hwndStaticStatus, msg);
+			SendMessage(m_hwndStatusBar, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
 			mctx->auto_position_timebar = TRUE;
 			RedrawTimeBar();
 		}
@@ -404,7 +378,7 @@ namespace MusicStudioCX
 			mctx->frame_offset += nFrames;
 
 			swprintf_s(msg, 256, L"Done.");
-			SetWindowText(m_hwndStaticStatus, msg);
+			SendMessage(m_hwndStatusBar, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
 			*lpCancel = TRUE;
 		}
 	}
@@ -449,7 +423,7 @@ namespace MusicStudioCX
 			mctx->CaptureDevInfo->WaveFormat.wBitsPerSample,
 			mctx->CaptureDevInfo->WaveFormat.nChannels,
 			sizeof(float));
-		SetWindowText(m_hwndStaticStatus, msg);
+		SendMessage(m_hwndStatusBar, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
 		mctx->frame_offset = 0;
 
 		if (m_hCaptureThread) CloseHandle(m_hCaptureThread);
@@ -528,7 +502,7 @@ namespace MusicStudioCX
 			mmsec = mmsec % 1000;
 			msec = msec % 60;
 			swprintf_s(msg, 256, L"%i min %i sec %i ms %i frm", mmin, msec, mmsec, mframe);
-			SetWindowText(m_hwndStaticStatus, msg);
+			SendMessage(m_hwndStatusBar, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
 			mctx->auto_position_timebar = TRUE;
 			RedrawTimeBar();
 		}
@@ -569,7 +543,7 @@ namespace MusicStudioCX
 			mctx->frame_offset += nFrames;
 
 			swprintf_s(msg, 256, L"Render Data; Done.");
-			SetWindowText(m_hwndStaticStatus, msg);
+			SendMessage(m_hwndStatusBar, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
 			*lpCancel = TRUE;
 		}
 	}
@@ -636,7 +610,7 @@ namespace MusicStudioCX
 			mctx->RenderDevInfo->WaveFormat.wBitsPerSample,
 			mctx->RenderDevInfo->WaveFormat.nChannels,
 			sizeof(float));
-		SetWindowText(m_hwndStaticStatus, msg);
+		SendMessage(m_hwndStatusBar, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
 		mctx->frame_offset = 0;
 		if (m_hRenderThread) CloseHandle(m_hRenderThread);
 		m_hRenderThread = INVALID_HANDLE_VALUE;
@@ -1129,7 +1103,7 @@ namespace MusicStudioCX
 
 		if (hFile != nullptr) {
 
-			SetWindowText(m_hwndStaticStatus, L"Saving...");
+			SendMessage(m_hwndStatusBar, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)L"Saving...");
 
 			// write a wav file
 			UINT32 DataSize =
@@ -1250,7 +1224,7 @@ namespace MusicStudioCX
 			}
 		done:
 			SendMessage(m_hwndProgBar, PBM_SETPOS, 0, 0);
-			SetWindowText(m_hwndStaticStatus, L"Ready");
+			SendMessage(m_hwndStatusBar, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)L"Ready");
 
 			// close file
 			CloseHandle(hFile);
@@ -1586,7 +1560,7 @@ namespace MusicStudioCX
 		ZeroMemory(&ofn, sizeof(OPENFILENAME));
 		ofn.lStructSize = sizeof(OPENFILENAME);
 		ofn.hwndOwner = hwnd;
-		ofn.hInstance = GetModuleHandle(nullptr);
+		ofn.hInstance = g_hInst;
 		ofn.lpstrFilter = L"*.wav";
 		ofn.lpstrFile = mctx->WavFileName;
 		ofn.lpstrInitialDir = initDir;
@@ -1780,7 +1754,7 @@ namespace MusicStudioCX
 			switch (wmId)
 			{
 			case BTN_CHSTRIP:
-				ChannelStrip::ToggleChannelStrip(hWnd);
+				ChannelStrip::ToggleChannelStrip(hWnd, g_hInst);
 				break;
 			case BTN_ZOOM_IN:
 				if (mctx->zoom_mult > 1) mctx->zoom_mult /= 2;
@@ -1830,13 +1804,13 @@ namespace MusicStudioCX
 				GoToStart(hWnd);
 				break;
 			case IDM_ABOUT:
-				DialogBox(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
+				DialogBox(g_hInst, MAKEINTRESOURCE(IDD_ABOUTBOX), hWnd, About);
 				break;
 			case IDM_EXIT:
 				DestroyWindow(hWnd);
 				break;
 			case ID_FILE_SETUP:
-				DialogBox(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDD_SETUPDLG), hWnd, SetupDlgProc);
+				DialogBox(g_hInst, MAKEINTRESOURCE(IDD_SETUPDLG), hWnd, SetupDlgProc);
 				break;
 			case ID_FILE_EXPORTMIXDOWN:
 				ExportMixdownAs(hWnd);
@@ -2052,7 +2026,8 @@ namespace MusicStudioCX
 			}
 			break;
 		case WM_SIZE:
-			//SendMessage(hwndStatus, WM_SIZE, wParam, lParam);
+			SendMessage(m_hwndStatusBar, WM_SIZE, wParam, lParam);
+			SendMessage(m_hwndToolbar, WM_SIZE, wParam, lParam);
 			mctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
 			for (int TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
 				if (mctx->TrackContextList[TrackIndex] != nullptr)
@@ -2065,12 +2040,14 @@ namespace MusicStudioCX
 		return 0;
 	}
 
-	void initialize_main_window()
+	void initialize_main_window(HINSTANCE hInst)
 	{
 		WNDCLASSEXW wcex;
 
-		LoadStringW(GetModuleHandle(nullptr), IDC_MUSICSTUDIOCX, m_szWindowClass, MAX_LOADSTRING);
-		LoadStringW(GetModuleHandle(nullptr), IDS_APP_TITLE, m_szTitle, MAX_LOADSTRING);
+		g_hInst = hInst;
+
+		LoadStringW(hInst, IDC_MUSICSTUDIOCX, m_szWindowClass, MAX_LOADSTRING);
+		LoadStringW(hInst, IDS_APP_TITLE, m_szTitle, MAX_LOADSTRING);
 
 		wcex.cbSize = sizeof(WNDCLASSEX);
 
@@ -2078,8 +2055,8 @@ namespace MusicStudioCX
 		wcex.lpfnWndProc = WndProc;
 		wcex.cbClsExtra = 0;
 		wcex.cbWndExtra = sizeof(MainWindowContext*);
-		wcex.hInstance = GetModuleHandle(nullptr);
-		wcex.hIcon = LoadIcon(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_MUSICSTUDIOCX));
+		wcex.hInstance = g_hInst;
+		wcex.hIcon = LoadIcon(g_hInst, MAKEINTRESOURCE(IDI_MUSICSTUDIOCX));
 		wcex.hCursor = LoadCursor(nullptr, IDC_ARROW);
 		wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
 		wcex.lpszMenuName = MAKEINTRESOURCEW(IDC_MUSICSTUDIOCX);
@@ -2092,40 +2069,7 @@ namespace MusicStudioCX
 	HWND create_main_window()
 	{
 		m_hwndMainWindow = CreateWindowW(m_szWindowClass, m_szTitle, WS_OVERLAPPEDWINDOW | WS_HSCROLL | WS_VSCROLL,
-			CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, GetModuleHandle(nullptr), nullptr);
-		//CreateStatusBar(hwndMainWindow);
-
-		//UINT32 ButtonLeft = 0;
-		//CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"ZIN", BTN_ZOOM_IN);
-		//ButtonLeft += 64;
-		//CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"ZOUT", BTN_ZOOM_OUT);
-		//ButtonLeft += 64;
-		//CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L" |< ", BTN_GOSTART);
-		//ButtonLeft += 64;
-		//CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"PLAY", BTN_PLAY);
-		//ButtonLeft += 64;
-		//CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"RCRD", BTN_REC);
-		//ButtonLeft += 64;
-		//CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"STOP", BTN_STOP);
-		//ButtonLeft += 64;
-		//CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"CHST", BTN_CHSTRIP);
-		//ButtonLeft += 64;
-		//CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"SELA", BTN_SELALL);
-		//ButtonLeft += 64;
-		//CXCommon::CreateButton(m_hwndMainWindow, ButtonLeft, 0, 64, 32, L"SELN ", BTN_SELNONE);
-
-		// create progress bar here
-		//ButtonLeft += 68;
-		//m_hwndProgBar = CreateWindowEx(0, L"msctls_progress32", nullptr, WS_CHILD | WS_VISIBLE, ButtonLeft, 8, 200, 16,
-			//m_hwndMainWindow, (HMENU)ID_SB_PROGRESS_BAR, GetModuleHandle(nullptr), nullptr);
-		//SendMessage(m_hwndProgBar, PBM_SETSTEP, (WPARAM)1, 0);
-		//SendMessage(m_hwndProgBar, PBM_SETRANGE, 0, MAKELONG(0,100));
-
-		// create label here
-		//ButtonLeft += 204;
-		//m_hwndStaticStatus = CreateWindow(L"STATIC", nullptr, WS_CHILD | WS_VISIBLE, ButtonLeft, 8, 200, 16,
-			//m_hwndMainWindow, (HMENU)ID_STATIC_STATUS, GetModuleHandle(nullptr), nullptr);
-		//SetWindowText(m_hwndStaticStatus, L"Ready");
+			CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, nullptr, nullptr, g_hInst, nullptr);
 
 		// set scroll bar info
 		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(m_hwndMainWindow, GWLP_USERDATA);
@@ -2179,7 +2123,9 @@ namespace MusicStudioCX
 		//ctx = MusicStudioCX::create_track_window_a(hwndMainWindow, L"Track2", 1);
 		//generate_sine(329.628f, mctx->rec_time_seconds, ctx->monobuffershort, 0.5f);
 
-		CreateRebarControl(m_hwndMainWindow);
+		HWND hwndToolbar = CreateToolbar(m_hwndMainWindow, g_hInst);
+
+		CreateStatusBar(m_hwndMainWindow);
 
 		return m_hwndMainWindow;
 	}

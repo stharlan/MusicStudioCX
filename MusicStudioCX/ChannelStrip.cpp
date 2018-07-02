@@ -58,11 +58,11 @@ namespace ChannelStrip
 		}
 	}
 
-	void ToggleChannelStrip(HWND hParent) {
+	void ToggleChannelStrip(HWND hParent, HINSTANCE hInst) {
 
 		BOOL update = FALSE;
 		if (hwndStripDialog == nullptr) {
-			hwndStripDialog = CreateDialog(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDD_CHSTRIPDLG), hParent, ChStripDialogProc);
+			hwndStripDialog = CreateDialog(hInst, MAKEINTRESOURCE(IDD_CHSTRIPDLG), hParent, ChStripDialogProc);
 			ShowWindow(hwndStripDialog, SW_SHOW);
 			update = TRUE;
 		}

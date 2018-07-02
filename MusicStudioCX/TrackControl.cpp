@@ -8,6 +8,8 @@
 namespace MusicStudioCX
 {
 
+	HINSTANCE g_hInst1 = nullptr;
+
 	INT_PTR CALLBACK TrackPropsDialogProc(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam);
 
 	void DrawTrackWindow(HWND hWnd)
@@ -310,7 +312,7 @@ namespace MusicStudioCX
 				InvalidateRect(hWnd, nullptr, FALSE);
 				break;
 			case BTN_TRACK_PROP:
-				DialogBoxParam(GetModuleHandle(nullptr), MAKEINTRESOURCE(IDD_TRACKPROPS), hWnd, TrackPropsDialogProc, (LPARAM)tctx);
+				DialogBoxParam(g_hInst1, MAKEINTRESOURCE(IDD_TRACKPROPS), hWnd, TrackPropsDialogProc, (LPARAM)tctx);
 				break;
 			default:
 				return DefWindowProc(hWnd, message, wParam, lParam);
@@ -338,14 +340,17 @@ namespace MusicStudioCX
 		return 0;
 	}
 
-	void initialize_track_window()
+	void initialize_track_window(HINSTANCE hInst)
 	{
 		WNDCLASS wcctl;
+
+		g_hInst1 = hInst;
+
 		ZeroMemory(&wcctl, sizeof(WNDCLASS));
 
 		wcctl.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
 		wcctl.hCursor = LoadCursor(nullptr, IDC_ARROW);
-		wcctl.hInstance = GetModuleHandle(nullptr);
+		wcctl.hInstance = hInst;
 		wcctl.lpfnWndProc = track_wnd_callback;
 		wcctl.lpszClassName = L"CXTrackWindowClass";
 		wcctl.style = CS_HREDRAW | CS_VREDRAW | CS_DBLCLKS;
@@ -392,15 +397,15 @@ namespace MusicStudioCX
 		HWND hwnd = CreateWindow(L"CXTrackWindowClass", TrackName,
 			WS_CHILD | WS_VISIBLE,
 			0, (idx * 128) + MAIN_WINDOW_HEADER_HEIGHT, r.right - r.left, 128,
-			parent, nullptr, GetModuleHandle(nullptr), nullptr);
+			parent, nullptr, g_hInst1, nullptr);
 
 		mctx->TrackContextList[idx]->TrackWindow = hwnd;
 		SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)mctx->TrackContextList[idx]);
 
 		// create some controls here
-		mctx->TrackContextList[idx]->buttons[0] = CXCommon::CreateButton(hwnd, 0, 32, 48, 32, L"Rec", BTN_ARM_REC);
-		mctx->TrackContextList[idx]->buttons[1] = CXCommon::CreateButton(hwnd, 0, 64, 48, 32, L"Mute", BTN_MUTE_TRACK);
-		mctx->TrackContextList[idx]->buttons[2] = CXCommon::CreateButton(hwnd, 0, 96, 48, 32, L"Prop", BTN_TRACK_PROP);
+		mctx->TrackContextList[idx]->buttons[0] = CXCommon::CreateButton(hwnd, g_hInst1, 0, 32, 48, 32, L"Rec", BTN_ARM_REC);
+		mctx->TrackContextList[idx]->buttons[1] = CXCommon::CreateButton(hwnd, g_hInst1, 0, 64, 48, 32, L"Mute", BTN_MUTE_TRACK);
+		mctx->TrackContextList[idx]->buttons[2] = CXCommon::CreateButton(hwnd, g_hInst1, 0, 96, 48, 32, L"Prop", BTN_TRACK_PROP);
 
 		return mctx->TrackContextList[idx];
 	}

@@ -30,7 +30,7 @@ namespace MusicStudioCX
 		std::wstring ProjectDir;
 	} MainWindowContext;
 
-	void initialize_main_window();
+	void initialize_main_window(HINSTANCE hInst);
 	HWND create_main_window();
 	void reposition_all_tracks(MainWindowContext* mctx);
 	void RegisterHotKeys(HWND hwnd);

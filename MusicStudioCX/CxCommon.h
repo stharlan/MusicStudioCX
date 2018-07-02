@@ -19,6 +19,6 @@ typedef void(*RTA_DATA_HANDLER)(HANDLER_CONTEXT* lpHandlerContext, BOOL* lpCance
 
 namespace CXCommon {
 
-	HWND CreateButton(HWND hWnd, int x, int y, int w, int h, const wchar_t* text, DWORD btnId, DWORD AddlStyles = 0);
+	HWND CreateButton(HWND hWnd, HINSTANCE hInst, int x, int y, int w, int h, const wchar_t* text, DWORD btnId, DWORD AddlStyles = 0);
 
 }
