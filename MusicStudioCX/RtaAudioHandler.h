@@ -17,10 +17,10 @@ public:
 	HRESULT PutWaitingWorkItem();
 	void ConfigureClientInformation(
 		IAudioCaptureClient *parmAudioCaptureClient,
-		LPRTA_DEVICE_INFO parmCaptureDeviceInfo,
+		RtaImpl::LPRTA_DEVICE_INFO parmCaptureDeviceInfo,
 		IAudioRenderClient *parmAudioRenderClient,
-		LPRTA_DEVICE_INFO parmRenderDeviceInfo,
-		RTA_DATA_HANDLER parmDataHandlerCallback)
+		RtaImpl::LPRTA_DEVICE_INFO parmRenderDeviceInfo,
+		MusicStudioCommon::RTA_DATA_HANDLER parmDataHandlerCallback)
 	{
 		this->pAudioCaptureClient = parmAudioCaptureClient;
 		this->pAudioCaptureClient->AddRef();
@@ -47,10 +47,10 @@ private:
 	UINT32 FrameCount;
 	DWORD flags;
 
-	LPRTA_DEVICE_INFO lpCaptureDeviceInfo;
-	LPRTA_DEVICE_INFO lpRenderDeviceInfo;
-	RTA_DATA_HANDLER pHandler;
-	HANDLER_CONTEXT hdlrCtx;
+	RtaImpl::LPRTA_DEVICE_INFO lpCaptureDeviceInfo;
+	RtaImpl::LPRTA_DEVICE_INFO lpRenderDeviceInfo;
+	MusicStudioCommon::RTA_DATA_HANDLER pHandler;
+	MusicStudioCommon::HANDLER_CONTEXT hdlrCtx;
 
 };
 

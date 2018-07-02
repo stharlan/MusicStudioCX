@@ -22,7 +22,7 @@ RtaAudioHandler::RtaAudioHandler()
 	this->lpCaptureDeviceInfo = NULL;
 	this->lpRenderDeviceInfo = NULL;
 	this->pHandler = NULL;
-	ZeroMemory(&this->hdlrCtx, sizeof(HANDLER_CONTEXT));
+	ZeroMemory(&this->hdlrCtx, sizeof(MusicStudioCommon::HANDLER_CONTEXT));
 }
 
 // cleanup the audio handler
@@ -122,7 +122,7 @@ STDMETHODIMP RtaAudioHandler::Invoke(IRtwqAsyncResult* pAsyncResult)
 		hdlrCtx.CapturedDataBuffer = this->lpCaptureDeviceInfo->FrameBufferByte;
 		hdlrCtx.DataToRenderBuffer = this->lpRenderDeviceInfo->FrameBufferByte;
 		hdlrCtx.frameCount = this->FrameCount;
-		hdlrCtx.audioDeviceType = AudioDeviceType::AUDIO_DEVICE_WASAPI;
+		hdlrCtx.audioDeviceType = MusicStudioCommon::AudioDeviceType::AUDIO_DEVICE_WASAPI;
 		pHandler(&hdlrCtx, &handlerResult);
 		hdlrCtx.LastFrameCounts[2] = hdlrCtx.LastFrameCounts[1];
 		hdlrCtx.LastFrameCounts[1] = hdlrCtx.LastFrameCounts[0];

@@ -27,9 +27,6 @@
     <ClInclude Include="MusicStudioCX.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="CXAudio.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="TrackControl.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -63,9 +60,6 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="MusicStudioCX.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="CXAudio.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="TrackControl.cpp">

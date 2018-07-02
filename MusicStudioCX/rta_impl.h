@@ -1,36 +1,40 @@
 #pragma once
 
-typedef struct {
-	LPWSTR DeviceName;
-	LPWSTR DeviceId;
-	BYTE* FrameBufferByte;
-	IMMDevice *pMMDevice;
-	IAudioClient *pAudioClient;
-	LPVOID pNext;
-	UINT32 BufferSizeFrames;
-	UINT32 RealBufferSizeFrames;
-	VARIANT_BOOL IsRawSupported;
-	DWORD SizeOfFrame;
-	WAVEFORMATEX WaveFormat;
-	UINT32 RtaDevInfoId;
-} RTA_DEVICE_INFO, *LPRTA_DEVICE_INFO;
+namespace RtaImpl {
 
-const char* rta_get_last_error();
+	typedef struct {
+		LPWSTR DeviceName;
+		LPWSTR DeviceId;
+		BYTE* FrameBufferByte;
+		IMMDevice *pMMDevice;
+		IAudioClient *pAudioClient;
+		LPVOID pNext;
+		UINT32 BufferSizeFrames;
+		UINT32 RealBufferSizeFrames;
+		VARIANT_BOOL IsRawSupported;
+		DWORD SizeOfFrame;
+		WAVEFORMATEX WaveFormat;
+		UINT32 RtaDevInfoId;
+	} RTA_DEVICE_INFO, *LPRTA_DEVICE_INFO;
 
-//LPVOID rta_alloc(SIZE_T size);
+	const char* rta_get_last_error();
 
-//void rta_free(LPVOID pvoid);
+	//LPVOID rta_alloc(SIZE_T size);
 
-UINT32 rta_list_supporting_devices_2(RTA_DEVICE_INFO** lppDeviceInfo,
-	WAVEFORMATEX *RequestedFormat,
-	DWORD StateMask, EDataFlow DataFlow, AUDCLNT_SHAREMODE ShareMode,
-	BOOL TestForChannels);
+	//void rta_free(LPVOID pvoid);
 
-void rta_free_device_list(LPRTA_DEVICE_INFO lpDeviceInfo);
+	UINT32 rta_list_supporting_devices_2(RTA_DEVICE_INFO** lppDeviceInfo,
+		WAVEFORMATEX *RequestedFormat,
+		DWORD StateMask, EDataFlow DataFlow, AUDCLNT_SHAREMODE ShareMode,
+		BOOL TestForChannels);
 
-BOOL rta_initialize_device_2(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags);
+	void rta_free_device_list(LPRTA_DEVICE_INFO lpDeviceInfo);
 
-void rta_capture_frames_rtwq(LPRTA_DEVICE_INFO lpCaptureDeviceInfo,
-	LPRTA_DEVICE_INFO lpRenderDeviceInfo, RTA_DATA_HANDLER pHandler);
+	BOOL rta_initialize_device_2(LPRTA_DEVICE_INFO lpDeviceInfo, DWORD StreamFlags);
 
-void rta_render_frames_rtwq(LPRTA_DEVICE_INFO lpRenderDeviceInfo, RTA_DATA_HANDLER pHandler);
+	void rta_capture_frames_rtwq(LPRTA_DEVICE_INFO lpCaptureDeviceInfo,
+		LPRTA_DEVICE_INFO lpRenderDeviceInfo, MusicStudioCommon::RTA_DATA_HANDLER pHandler);
+
+	void rta_render_frames_rtwq(LPRTA_DEVICE_INFO lpRenderDeviceInfo, MusicStudioCommon::RTA_DATA_HANDLER pHandler);
+
+}

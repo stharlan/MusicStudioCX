@@ -19,7 +19,7 @@ RtaRenderAudioHandler::RtaRenderAudioHandler()
 	this->flags = 0;
 	this->lpRenderDeviceInfo = NULL;
 	this->pHandler = NULL;
-	ZeroMemory(&this->hdlrCtx, sizeof(HANDLER_CONTEXT));
+	ZeroMemory(&this->hdlrCtx, sizeof(MusicStudioCommon::HANDLER_CONTEXT));
 }
 
 // cleanup the audio handler
@@ -118,7 +118,7 @@ STDMETHODIMP RtaRenderAudioHandler::Invoke(IRtwqAsyncResult* pAsyncResult)
 
 		hdlrCtx.DataToRenderBuffer = this->lpRenderDeviceInfo->FrameBufferByte;
 		hdlrCtx.frameCount = this->FrameCount;
-		hdlrCtx.audioDeviceType = AudioDeviceType::AUDIO_DEVICE_WASAPI;
+		hdlrCtx.audioDeviceType = MusicStudioCommon::AudioDeviceType::AUDIO_DEVICE_WASAPI;
 		pHandler(&hdlrCtx, &handlerResult);
 
 		// get buffer from the render client

@@ -46,8 +46,8 @@ namespace ChannelStrip
 		if (hwndStripDialog != nullptr) {
 			if (IsWindowVisible(hwndStripDialog)) {
 				HWND hParent = GetParent(hwndStripDialog);
-				MusicStudioCX::MainWindowContext* mctx =
-					(MusicStudioCX::MainWindowContext*)GetWindowLongPtr(hParent, GWLP_USERDATA);
+				MainWindow::MainWindowContext* mctx =
+					(MainWindow::MainWindowContext*)GetWindowLongPtr(hParent, GWLP_USERDATA);
 				for (int t = 0; t < 16; t++) {
 					TrackContext *tc = mctx->TrackContextList[t];
 					SendMessage(GetDlgItem(hwndStripDialog, METER_ID_ARRAY[t]), PBM_SETPOS, tc->MeterVal, 0);
@@ -77,8 +77,8 @@ namespace ChannelStrip
 		}
 
 		if (TRUE == update) {
-			MusicStudioCX::MainWindowContext* mctx = 
-				(MusicStudioCX::MainWindowContext*)GetWindowLongPtr(hParent, GWLP_USERDATA);
+			MainWindow::MainWindowContext* mctx =
+				(MainWindow::MainWindowContext*)GetWindowLongPtr(hParent, GWLP_USERDATA);
 			for (int t = 0; t < 16; t++) {
 				TrackContext *tc = mctx->TrackContextList[t];
 				UINT32 SliderPos = 0;

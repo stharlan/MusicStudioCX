@@ -16,8 +16,8 @@ public:
 	HRESULT PutWaitingWorkItem();
 	void ConfigureClientInformation(
 		IAudioRenderClient *parmAudioRenderClient,
-		LPRTA_DEVICE_INFO parmRenderDeviceInfo,
-		RTA_DATA_HANDLER parmDataHandlerCallback)
+		RtaImpl::LPRTA_DEVICE_INFO parmRenderDeviceInfo,
+		MusicStudioCommon::RTA_DATA_HANDLER parmDataHandlerCallback)
 	{
 		this->pHandler = parmDataHandlerCallback;
 		this->pAudioRenderClient = parmAudioRenderClient;
@@ -39,8 +39,8 @@ private:
 	UINT32 FrameCount;
 	DWORD flags;
 
-	LPRTA_DEVICE_INFO lpRenderDeviceInfo;
-	RTA_DATA_HANDLER pHandler;
-	HANDLER_CONTEXT hdlrCtx;
+	RtaImpl::LPRTA_DEVICE_INFO lpRenderDeviceInfo;
+	MusicStudioCommon::RTA_DATA_HANDLER pHandler;
+	MusicStudioCommon::HANDLER_CONTEXT hdlrCtx;
 };
 

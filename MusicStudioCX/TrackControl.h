@@ -48,7 +48,7 @@ typedef short FRAME1CHSHORT;
 
 typedef short SAMPLESHORT;
 
-namespace MusicStudioCX
+namespace TrackControl
 {
 
 	void initialize_track_window(HINSTANCE hInst);

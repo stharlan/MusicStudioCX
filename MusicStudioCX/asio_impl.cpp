@@ -142,8 +142,8 @@ namespace CXASIO {
 	long g_numOutputChannels;
 	LARGE_INTEGER g_pfreq;
 	LARGE_INTEGER g_pLast = { 0 };
-	RTA_DATA_HANDLER g_pHandler = nullptr;
-	HANDLER_CONTEXT g_hctx;
+	MusicStudioCommon::RTA_DATA_HANDLER g_pHandler = nullptr;
+	MusicStudioCommon::HANDLER_CONTEXT g_hctx;
 	FRAME2CHSHORT* g_TransferRenderBuffer2Ch;
 	short* g_TransferCaptureBufferNCh;
 
@@ -156,7 +156,7 @@ namespace CXASIO {
 		ASIOBufferInfo* pOutputBuffer = g_BufferInfo + g_numInputChannels;
 		INT32* i32outputch0 = (INT32*)pOutputBuffer[0].buffers[doubleBufferIndex];
 		INT32* i32outputch1 = (INT32*)pOutputBuffer[1].buffers[doubleBufferIndex];
-		HANDLER_CONTEXT hctx;
+		MusicStudioCommon::HANDLER_CONTEXT hctx;
 		short temp = 0;
 		short sval = 0;
 
@@ -187,7 +187,7 @@ namespace CXASIO {
 		}
 
 		ZeroMemory(g_TransferRenderBuffer2Ch, g_PreferredBufferSizeSamples * sizeof(FRAME2CHSHORT));
-		hctx.audioDeviceType = AudioDeviceType::AUDIO_DEVICE_ASIO;
+		hctx.audioDeviceType = MusicStudioCommon::AudioDeviceType::AUDIO_DEVICE_ASIO;
 		hctx.CapturedDataBuffer = (BYTE*)g_TransferCaptureBufferNCh;
 		hctx.DataToRenderBuffer = (BYTE*)g_TransferRenderBuffer2Ch;
 		hctx.frameCount = g_PreferredBufferSizeSamples;
@@ -225,7 +225,7 @@ namespace CXASIO {
 		ASIOBufferInfo* pOutputBuffer = g_BufferInfo;
 		INT32* i32outputch0 = (INT32*)pOutputBuffer[0].buffers[doubleBufferIndex];
 		INT32* i32outputch1 = (INT32*)pOutputBuffer[1].buffers[doubleBufferIndex];
-		HANDLER_CONTEXT hctx;
+		MusicStudioCommon::HANDLER_CONTEXT hctx;
 
 		QueryPerformanceCounter(&ctr);
 		totalelps = ctr.QuadPart - g_pLast.QuadPart;
@@ -238,7 +238,7 @@ namespace CXASIO {
 		g_pLast = ctr;
 
 		ZeroMemory(g_TransferRenderBuffer2Ch, g_PreferredBufferSizeSamples * sizeof(FRAME2CHSHORT));
-		hctx.audioDeviceType = AudioDeviceType::AUDIO_DEVICE_ASIO;
+		hctx.audioDeviceType = MusicStudioCommon::AudioDeviceType::AUDIO_DEVICE_ASIO;
 		hctx.CapturedDataBuffer = nullptr;
 		hctx.DataToRenderBuffer = (BYTE*)g_TransferRenderBuffer2Ch;
 		hctx.frameCount = g_PreferredBufferSizeSamples;
@@ -334,7 +334,7 @@ namespace CXASIO {
 		return 0;
 	}
 
-	int asio_start(ASIO_DEVICE_INFO *pDevice, RTA_DATA_HANDLER pHandler, BOOL IsRecording)
+	int asio_start(ASIO_DEVICE_INFO *pDevice, MusicStudioCommon::RTA_DATA_HANDLER pHandler, BOOL IsRecording)
 	{
 
 		CLSID driverClsid;

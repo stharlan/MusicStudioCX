@@ -5,7 +5,7 @@
 #define BTN_MUTE_TRACK 20001
 #define BTN_TRACK_PROP 20002
 
-namespace MusicStudioCX
+namespace TrackControl
 {
 
 	HINSTANCE g_hInst1 = nullptr;
@@ -16,8 +16,8 @@ namespace MusicStudioCX
 	{
 		PAINTSTRUCT ps;
 		HDC hdc = BeginPaint(hWnd, &ps);
-		TrackContext * ctx = get_track_context(hWnd);
-		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(GetParent(hWnd), GWLP_USERDATA);
+		TrackContext * ctx = TrackControl::get_track_context(hWnd);
+		MainWindow::MainWindowContext* mctx = (MainWindow::MainWindowContext*)GetWindowLongPtr(GetParent(hWnd), GWLP_USERDATA);
 		RECT r, r1;
 		HGDIOBJ OldPen = nullptr;
 		wchar_t WindowName[16];
@@ -140,14 +140,6 @@ namespace MusicStudioCX
 
 	}
 
-	void RedrawAllTracks(HWND twnd) 
-	{
-		HWND hParent = GetParent(twnd);
-		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(hParent, GWLP_USERDATA);
-		for (int ti = 0; ti < NUM_TRACKS; ti++) {
-			InvalidateRect(mctx->TrackContextList[ti]->TrackWindow, nullptr, FALSE);
-		}
-	}
 
 	void SelectRange(HWND twnd)
 	{
@@ -155,7 +147,7 @@ namespace MusicStudioCX
 		int LastSelected = -1;
 		int ThisIndex = -1;
 		HWND hParent = GetParent(twnd);
-		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(hParent, GWLP_USERDATA);
+		MainWindow::MainWindowContext* mctx = (MainWindow::MainWindowContext*)GetWindowLongPtr(hParent, GWLP_USERDATA);
 		for (int ti = 0; ti < NUM_TRACKS; ti++) {
 			TrackContext* tctx = mctx->TrackContextList[ti];
 			if (TRUE == CheckState(tctx, TRACK_STATE_SELECTED)) {
@@ -196,7 +188,7 @@ namespace MusicStudioCX
 	void SelectAdd(HWND twnd)
 	{
 		HWND hParent = GetParent(twnd);
-		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(hParent, GWLP_USERDATA);
+		MainWindow::MainWindowContext* mctx = (MainWindow::MainWindowContext*)GetWindowLongPtr(hParent, GWLP_USERDATA);
 		for (int ti = 0; ti < NUM_TRACKS; ti++) {
 			if (mctx->TrackContextList[ti]->TrackWindow == twnd) {
 				SetState(mctx->TrackContextList[ti], TRACK_STATE_SELECTED);
@@ -208,7 +200,7 @@ namespace MusicStudioCX
 	void SelectOnly(HWND twnd) 
 	{
 		HWND hParent = GetParent(twnd);
-		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(hParent, GWLP_USERDATA);
+		MainWindow::MainWindowContext* mctx = (MainWindow::MainWindowContext*)GetWindowLongPtr(hParent, GWLP_USERDATA);
 		for (int ti = 0; ti < NUM_TRACKS; ti++) {
 			if (mctx->TrackContextList[ti]->TrackWindow == twnd) {
 				SetState(mctx->TrackContextList[ti], TRACK_STATE_SELECTED);
@@ -241,7 +233,7 @@ namespace MusicStudioCX
 	LRESULT CALLBACK track_wnd_callback(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 	{
 		TrackContext * tctx = nullptr;
-		MainWindowContext* mctx = nullptr;
+		MainWindow::MainWindowContext* mctx = nullptr;
 		WORD mx = 0, my = 0;
 		RECT wr;
 		UINT32 itemHeight = 0;
@@ -251,19 +243,19 @@ namespace MusicStudioCX
 		{
 		case WM_RBUTTONDOWN:
 			if ((GET_X_LPARAM(lParam) >= WVFRM_OFFSET) && (GetKeyState(VK_MENU) < 0)) {
-				mctx = (MainWindowContext*)GetWindowLongPtr(GetParent(hWnd), GWLP_USERDATA);
+				mctx = (MainWindow::MainWindowContext*)GetWindowLongPtr(GetParent(hWnd), GWLP_USERDATA);
 				mctx->sel_end_frame =
 					MulDiv(mctx->hscroll_pos, mctx->max_frames, 65535) +
 					((GET_X_LPARAM(lParam) - WVFRM_OFFSET) * mctx->zoom_mult);
 				mctx->sel_end_frame = SnapFrameToBeat(mctx->sel_end_frame);
-				RedrawAllTracks(hWnd);
+				MainWindow::reposition_all_tracks();
 #ifdef _DEBUG
 				printf("frame is %i\n", mctx->sel_begin_frame);
 #endif
 			}
 			break;
 		case WM_LBUTTONDOWN:
-			mctx = (MainWindowContext*)GetWindowLongPtr(GetParent(hWnd), GWLP_USERDATA);
+			mctx = (MainWindow::MainWindowContext*)GetWindowLongPtr(GetParent(hWnd), GWLP_USERDATA);
 			if ((GET_X_LPARAM(lParam) >= WVFRM_OFFSET) && (GetKeyState(VK_MENU) < 0)) {
 				mctx->sel_begin_frame =
 					MulDiv(mctx->hscroll_pos, mctx->max_frames, 65535) +
@@ -272,6 +264,7 @@ namespace MusicStudioCX
 #ifdef _DEBUG
 				printf("frame is %i\n", mctx->sel_begin_frame);
 #endif
+				MainWindow::SetTrackSelectionMsg();
 			}
 			else {
 				//mctx->sel_begin_frame = mctx->sel_end_frame = 0;
@@ -286,20 +279,20 @@ namespace MusicStudioCX
 					SelectOnly(hWnd);
 				}
 			}
-			RedrawAllTracks(hWnd);
+			MainWindow::reposition_all_tracks();
 			break;
 		case WM_LBUTTONDBLCLK:
-			tctx = get_track_context(hWnd);
+			tctx = TrackControl::get_track_context(hWnd);
 			mx = LOWORD(lParam);
 			my = HIWORD(lParam);
 			if (mx > 0 && mx < WVFRM_OFFSET && my > 0 && my < 32) {
 				ToggleState(tctx, TRACK_STATE_MINIMIZED);
-				mctx = (MainWindowContext*)GetWindowLongPtr(GetParent(hWnd), GWLP_USERDATA);
-				reposition_all_tracks(mctx);
+				mctx = (MainWindow::MainWindowContext*)GetWindowLongPtr(GetParent(hWnd), GWLP_USERDATA);
+				MainWindow::reposition_all_tracks();
 			}
 			break;
 		case WM_COMMAND:
-			tctx = get_track_context(hWnd);
+			tctx = TrackControl::get_track_context(hWnd);
 			switch (LOWORD(wParam)) {
 			case BTN_ARM_REC:
 				IsArmed = ToggleState(tctx, TRACK_STATE_ARMED);
@@ -319,7 +312,7 @@ namespace MusicStudioCX
 			}
 			break;
 		case WM_NCDESTROY:
-			tctx = get_track_context(hWnd);
+			tctx = TrackControl::get_track_context(hWnd);
 			if (tctx->monobuffershort) free(tctx->monobuffershort);
 			if (tctx) free(tctx);
 			break;
@@ -327,7 +320,7 @@ namespace MusicStudioCX
 			DrawTrackWindow(hWnd);
 			break;
 		case WM_SIZE:
-			tctx = get_track_context(hWnd);
+			tctx = TrackControl::get_track_context(hWnd);
 			itemHeight = 128;
 			if (tctx != nullptr) {
 				if(TRUE == CheckState(tctx, TRACK_STATE_MINIMIZED)) itemHeight = 32;
@@ -359,12 +352,12 @@ namespace MusicStudioCX
 		RegisterClass(&wcctl);
 	}
 
-	TrackContext* allocate_context(MainWindowContext* mctx, HWND parent, short channel)
+	TrackContext* allocate_context(MainWindow::MainWindowContext* mctx, HWND parent, short channel)
 	{
 		// allocate context
 		TrackContext* ctx = (TrackContext*)malloc(sizeof(TrackContext));
 		ZeroMemory(ctx, sizeof(TrackContext));
-		mctx = (MainWindowContext*)GetWindowLongPtr(parent, GWLP_USERDATA);
+		mctx = (MainWindow::MainWindowContext*)GetWindowLongPtr(parent, GWLP_USERDATA);
 		// sixty seconds worth of samples
 		ctx->wstate = 0;
 		ctx->InputChannelIndex = channel;
@@ -386,7 +379,7 @@ namespace MusicStudioCX
 
 	TrackContext* create_track_window_a(HWND parent, LPCWSTR TrackName, short channel)
 	{
-		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(parent, GWLP_USERDATA);
+		MainWindow::MainWindowContext* mctx = (MainWindow::MainWindowContext*)GetWindowLongPtr(parent, GWLP_USERDATA);
 		RECT r = { 0 };
 		UINT32 idx = 0;
 
@@ -403,9 +396,9 @@ namespace MusicStudioCX
 		SetWindowLongPtr(hwnd, GWLP_USERDATA, (LONG_PTR)mctx->TrackContextList[idx]);
 
 		// create some controls here
-		mctx->TrackContextList[idx]->buttons[0] = CXCommon::CreateButton(hwnd, g_hInst1, 0, 32, 48, 32, L"Rec", BTN_ARM_REC);
-		mctx->TrackContextList[idx]->buttons[1] = CXCommon::CreateButton(hwnd, g_hInst1, 0, 64, 48, 32, L"Mute", BTN_MUTE_TRACK);
-		mctx->TrackContextList[idx]->buttons[2] = CXCommon::CreateButton(hwnd, g_hInst1, 0, 96, 48, 32, L"Prop", BTN_TRACK_PROP);
+		mctx->TrackContextList[idx]->buttons[0] = MusicStudioCommon::CreateButton(hwnd, g_hInst1, 0, 32, 48, 32, L"Rec", BTN_ARM_REC);
+		mctx->TrackContextList[idx]->buttons[1] = MusicStudioCommon::CreateButton(hwnd, g_hInst1, 0, 64, 48, 32, L"Mute", BTN_MUTE_TRACK);
+		mctx->TrackContextList[idx]->buttons[2] = MusicStudioCommon::CreateButton(hwnd, g_hInst1, 0, 96, 48, 32, L"Prop", BTN_TRACK_PROP);
 
 		return mctx->TrackContextList[idx];
 	}

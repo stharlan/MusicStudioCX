@@ -153,7 +153,6 @@
   <ItemGroup>
     <ClInclude Include="asio_impl.h" />
     <ClInclude Include="ChannelStrip.h" />
-    <ClInclude Include="CXAudio.h" />
     <ClInclude Include="CxCommon.h" />
     <ClInclude Include="MainWindow.h" />
     <ClInclude Include="MusicStudioCX.h" />
@@ -169,7 +168,6 @@
   <ItemGroup>
     <ClCompile Include="asio_impl.cpp" />
     <ClCompile Include="ChannelStrip.cpp" />
-    <ClCompile Include="CXAudio.cpp" />
     <ClCompile Include="MainWindow.cpp" />
     <ClCompile Include="MusicStudioCX.cpp" />
     <ClCompile Include="RtaAudioHandler.cpp" />

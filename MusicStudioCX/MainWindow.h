@@ -3,7 +3,7 @@
 #define MAIN_WINDOW_HEADER_HEIGHT 64
 #define WVFRM_OFFSET 56
 
-namespace MusicStudioCX
+namespace MainWindow
 {
 
 	enum AUDIO_DEVICE_TYPE {
@@ -22,8 +22,8 @@ namespace MusicStudioCX
 		UINT32 sel_end_frame;
 		BOOL auto_position_timebar;
 		TrackContext* TrackContextList[NUM_TRACKS];
-		LPRTA_DEVICE_INFO CaptureDevInfo = nullptr;
-		LPRTA_DEVICE_INFO RenderDevInfo = nullptr;
+		RtaImpl::LPRTA_DEVICE_INFO CaptureDevInfo = nullptr;
+		RtaImpl::LPRTA_DEVICE_INFO RenderDevInfo = nullptr;
 		ASIO_DEVICE_INFO* AsioDevInfo = nullptr;
 		AUDIO_DEVICE_TYPE adt;
 		wchar_t WavFileName[1024];
@@ -32,6 +32,8 @@ namespace MusicStudioCX
 
 	void initialize_main_window(HINSTANCE hInst);
 	HWND create_main_window();
-	void reposition_all_tracks(MainWindowContext* mctx);
+	void reposition_all_tracks();
 	void RegisterHotKeys(HWND hwnd);
+	void SetTrackSelectionMsg();
+	//void RedrawAllTracksTrack(HWND twnd);
 }
