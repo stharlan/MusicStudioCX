@@ -247,11 +247,14 @@ namespace TrackControl
 				mctx->sel_end_frame =
 					MulDiv(mctx->hscroll_pos, mctx->max_frames, 65535) +
 					((GET_X_LPARAM(lParam) - WVFRM_OFFSET) * mctx->zoom_mult);
-				mctx->sel_end_frame = SnapFrameToBeat(mctx->sel_end_frame);
+				if (TRUE == mctx->snap_selection) {
+					mctx->sel_end_frame = SnapFrameToBeat(mctx->sel_end_frame);
+				}
 				MainWindow::reposition_all_tracks();
 #ifdef _DEBUG
 				printf("frame is %i\n", mctx->sel_begin_frame);
 #endif
+				MainWindow::SetTrackSelectionMsg();
 			}
 			break;
 		case WM_LBUTTONDOWN:
@@ -260,7 +263,9 @@ namespace TrackControl
 				mctx->sel_begin_frame =
 					MulDiv(mctx->hscroll_pos, mctx->max_frames, 65535) +
 					((GET_X_LPARAM(lParam) - WVFRM_OFFSET) * mctx->zoom_mult);
-				mctx->sel_begin_frame = SnapFrameToBeat(mctx->sel_begin_frame);
+				if (TRUE == mctx->snap_selection) {
+					mctx->sel_begin_frame = SnapFrameToBeat(mctx->sel_begin_frame);
+				}
 #ifdef _DEBUG
 				printf("frame is %i\n", mctx->sel_begin_frame);
 #endif

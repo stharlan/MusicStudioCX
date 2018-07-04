@@ -33,8 +33,9 @@ namespace MainWindow
 
 	HWND m_hwndMainWindow = nullptr;
 	HWND m_hwndProgBar = nullptr;
-	HWND m_hwndStatusBar = nullptr;
+	//HWND m_hwndStatusBar = nullptr;
 	HWND m_hwndToolbar = nullptr;
+	HWND m_hwndStatus1 = nullptr;
 
 	BOOL m_TriggerStop = FALSE;
 
@@ -89,53 +90,74 @@ namespace MainWindow
 		ZeroMemory(msg, 128 * sizeof(wchar_t));
 		MainWindowContext* mctx = (MainWindowContext*)GetWindowLongPtr(m_hwndMainWindow, GWLP_USERDATA);
 
-		UINT32 ms = mctx->sel_begin_frame / 48;
-		UINT32 sec = ms / 1000;
-		UINT32 min = sec / 60;
+		UINT32 bms = mctx->sel_begin_frame / 48;
+		UINT32 bsec = bms / 1000;
+		UINT32 bmin = bsec / 60;
 
-		UINT32 frames = mctx->sel_begin_frame % 48;
-		ms = ms % 1000;
-		sec = sec % 60;
+		UINT32 bframes = mctx->sel_begin_frame % 48;
+		bms = bms % 1000;
+		bsec = bsec % 60;
 		
-		swprintf_s(msg, 128, L"%i m %i s %i ms %i f\n",
-			min, sec, ms, frames);
-		SendMessage(m_hwndStatusBar, SB_SETTEXT, MAKEWORD(2, 0), (LPARAM)msg);
+		if (mctx->sel_end_frame > mctx->sel_begin_frame) {
+
+			UINT32 dframe = mctx->sel_end_frame - mctx->sel_begin_frame;
+
+			UINT32 ems = dframe / 48;
+			UINT32 esec = ems / 1000;
+			UINT32 emin = esec / 60;
+
+			UINT32 eframes = dframe % 48;
+			ems = ems % 1000;
+			esec = esec % 60;
+
+			swprintf_s(msg, 128, L"%i m %i s %i ms %i f ( %i m %i s %i ms %i f)\n",
+				bmin, bsec, bms, bframes,
+				emin, esec, ems, eframes);
+
+		}
+		else {
+			swprintf_s(msg, 128, L"%i m %i s %i ms %i f\n",
+				bmin, bsec, bms, bframes);
+		}
+
+		//SendMessage(m_hwndStatusBar, SB_SETTEXT, MAKEWORD(2, 0), (LPARAM)msg);
+		SetWindowText(m_hwndStatus1, msg);
 	}
 
-	void CreateStatusBar(HWND hwndParent)
-	{
-		InitCommonControls();
+	//void CreateStatusBar(HWND hwndParent)
+	//{
+	//	InitCommonControls();
 
-		m_hwndStatusBar = CreateWindowEx(
-			0,						// no extended styles
-			STATUSCLASSNAME,        // name of status bar class
-			nullptr,           // no text when first created
-			WS_CHILD | WS_VISIBLE,  // creates a visible child window
-			0, 0, 0, 0,             // ignores size and position
-			hwndParent,             // handle to parent window
-			(HMENU)STATUS_BAR_ID,	// child window identifier
-			g_hInst,	// handle to application instance
-			NULL);                  // no window creation data
+	//	m_hwndStatusBar = CreateWindowEx(
+	//		0,						// no extended styles
+	//		STATUSCLASSNAME,        // name of status bar class
+	//		nullptr,           // no text when first created
+	//		WS_CHILD | WS_VISIBLE,  // creates a visible child window
+	//		0, 0, 0, 0,             // ignores size and position
+	//		hwndParent,             // handle to parent window
+	//		(HMENU)STATUS_BAR_ID,	// child window identifier
+	//		g_hInst,	// handle to application instance
+	//		NULL);                  // no window creation data
 
-		int iBarWidths[] = { 200, 408, -1 };
+	//	int iBarWidths[] = { 200, 408, -1 };
 
-		SendMessage(m_hwndStatusBar, SB_SETPARTS, _ARRAYSIZE(iBarWidths), (LPARAM)iBarWidths);
-		SendMessage(m_hwndStatusBar, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)L"Ready");
+	//	SendMessage(m_hwndStatusBar, SB_SETPARTS, _ARRAYSIZE(iBarWidths), (LPARAM)iBarWidths);
+	//	SendMessage(m_hwndStatusBar, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)L"Ready");
 
-		// Creating and place the  Progress Bar inside the StatusBar 
-		m_hwndProgBar = CreateWindowEx(
-			0, 
-			L"msctls_progress32", 
-			nullptr, 
-			WS_CHILD | WS_VISIBLE, 
-			204, 4, 200, 16,
-			m_hwndStatusBar, 
-			(HMENU)ID_SB_PROGRESS_BAR, 
-			g_hInst, 
-			NULL);
-		SendMessage(m_hwndProgBar, PBM_SETSTEP, (WPARAM)1, 0);
+	//	// Creating and place the  Progress Bar inside the StatusBar 
+	//	m_hwndProgBar = CreateWindowEx(
+	//		0, 
+	//		L"msctls_progress32", 
+	//		nullptr, 
+	//		WS_CHILD | WS_VISIBLE, 
+	//		204, 4, 200, 16,
+	//		m_hwndStatusBar, 
+	//		(HMENU)ID_SB_PROGRESS_BAR, 
+	//		g_hInst, 
+	//		NULL);
+	//	SendMessage(m_hwndProgBar, PBM_SETSTEP, (WPARAM)1, 0);
 
-	}
+	//}
 
 	void RegisterHotKeys(HWND hwnd)
 	{
@@ -199,6 +221,24 @@ namespace MainWindow
 		printf("toolbar height = %i\n", r.bottom - r.top);
 		printf("toolbar width = %i\n", r.right - r.left);
 
+		// create some static items 
+		m_hwndStatus1 = CreateWindow(L"STATIC", L"Ready", WS_CHILD | WS_VISIBLE | SS_SUNKEN,
+			2, 38, 300, 20, hwndOwner, nullptr, hInst, 0);
+		SetWindowText(m_hwndStatus1, L"Ready...");
+
+		// Creating and place the  Progress Bar inside the StatusBar 
+		m_hwndProgBar = CreateWindowEx(
+			0, 
+			L"msctls_progress32", 
+			nullptr, 
+			WS_CHILD | WS_VISIBLE, 
+			310, 38, 300, 20,
+			hwndOwner, 
+			(HMENU)ID_SB_PROGRESS_BAR, 
+			hInst, 
+			NULL);
+		SendMessage(m_hwndProgBar, PBM_SETSTEP, (WPARAM)1, 0);
+
 		return m_hwndToolbar;
 	}
 
@@ -213,6 +253,7 @@ namespace MainWindow
 		mctx->ProjectDir = std::wstring();
 		mctx->rec_time_seconds = REC_TIME_SECONDS;
 		mctx->vscroll_pos = 0;
+		mctx->snap_selection = TRUE;
 		ZeroMemory(mctx->WavFileName, 1024 * sizeof(wchar_t));
 		mctx->zoom_mult = 512;
 
@@ -360,7 +401,7 @@ namespace MainWindow
 			mmsec = mmsec % 1000;
 			msec = msec % 60;
 			swprintf_s(msg, 256, L"%i min %i sec %i ms %i frm", mmin, msec, mmsec, mframe);
-			SendMessage(m_hwndStatusBar, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
+			SetWindowText(m_hwndStatus1, msg);
 			mctx->auto_position_timebar = TRUE;
 			RedrawTimeBar();
 		}
@@ -408,7 +449,7 @@ namespace MainWindow
 			mctx->frame_offset += nFrames;
 
 			swprintf_s(msg, 256, L"Done.");
-			SendMessage(m_hwndStatusBar, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
+			SetWindowText(m_hwndStatus1, msg);
 			*lpCancel = TRUE;
 		}
 	}
@@ -453,7 +494,7 @@ namespace MainWindow
 			mctx->CaptureDevInfo->WaveFormat.wBitsPerSample,
 			mctx->CaptureDevInfo->WaveFormat.nChannels,
 			sizeof(float));
-		SendMessage(m_hwndStatusBar, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
+		SetWindowText(m_hwndStatus1, msg);
 		mctx->frame_offset = 0;
 
 		if (m_hCaptureThread) CloseHandle(m_hCaptureThread);
@@ -532,7 +573,7 @@ namespace MainWindow
 			mmsec = mmsec % 1000;
 			msec = msec % 60;
 			swprintf_s(msg, 256, L"%i min %i sec %i ms %i frm", mmin, msec, mmsec, mframe);
-			SendMessage(m_hwndStatusBar, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
+			SetWindowText(m_hwndStatus1, msg);
 			mctx->auto_position_timebar = TRUE;
 			RedrawTimeBar();
 		}
@@ -573,7 +614,7 @@ namespace MainWindow
 			mctx->frame_offset += nFrames;
 
 			swprintf_s(msg, 256, L"Render Data; Done.");
-			SendMessage(m_hwndStatusBar, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
+			SetWindowText(m_hwndStatus1, msg);
 			*lpCancel = TRUE;
 		}
 	}
@@ -640,7 +681,7 @@ namespace MainWindow
 			mctx->RenderDevInfo->WaveFormat.wBitsPerSample,
 			mctx->RenderDevInfo->WaveFormat.nChannels,
 			sizeof(float));
-		SendMessage(m_hwndStatusBar, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)msg);
+		SetWindowText(m_hwndStatus1, msg);
 		mctx->frame_offset = 0;
 		if (m_hRenderThread) CloseHandle(m_hRenderThread);
 		m_hRenderThread = INVALID_HANDLE_VALUE;
@@ -887,9 +928,9 @@ namespace MainWindow
 		GetClientRect(m_hwndMainWindow, &cr);
 		RECT r = { 0 };
 		r.left = WVFRM_OFFSET;
-		r.top = 32;
+		r.top = MAIN_WINDOW_TIMEBAR_OFFSET;
 		r.right = cr.right;
-		r.bottom = 64;
+		r.bottom = MAIN_WINDOW_TIMEBAR_OFFSET + 32;
 		InvalidateRect(m_hwndMainWindow, &r, FALSE);
 	}
 
@@ -900,9 +941,9 @@ namespace MainWindow
 		GetClientRect(hwnd, &cr);
 		RECT r = { 0 };
 		r.left = WVFRM_OFFSET;
-		r.top = 32;
+		r.top = MAIN_WINDOW_TIMEBAR_OFFSET;
 		r.right = cr.right;
-		r.bottom = 64;
+		r.bottom = MAIN_WINDOW_TIMEBAR_OFFSET + 32;
 		FillRect(hdc, &r, (HBRUSH)GetStockObject(BLACK_BRUSH));
 
 		//UINT32 bpmin = 120;
@@ -989,12 +1030,12 @@ namespace MainWindow
 		
 		for (UINT32 measure = StartMeasure; measure < EndMeasure; measure++) {
 			UINT32 pos = (((measure * fpt) - StartFrame) / mctx->zoom_mult) + WVFRM_OFFSET;
-			MoveToEx(hdc, pos, 48, nullptr);
-			LineTo(hdc, pos, 64);
+			MoveToEx(hdc, pos, MAIN_WINDOW_TIMEBAR_OFFSET + 16, nullptr);
+			LineTo(hdc, pos, MAIN_WINDOW_TIMEBAR_OFFSET + 32);
 			tr.left = pos;
 			tr.right = pos + (fpt / mctx->zoom_mult);
-			tr.top = 32;
-			tr.bottom = 48;
+			tr.top = MAIN_WINDOW_TIMEBAR_OFFSET;
+			tr.bottom = MAIN_WINDOW_TIMEBAR_OFFSET + 16;
 			wsprintf(timeval, L"%i", measure);
 			DrawText(hdc, timeval, (int)wcslen(timeval), &tr, DT_TOP | DT_LEFT);
 			//float time = (float)sec * (float)secMult / (float)secDiv;
@@ -1035,8 +1076,8 @@ namespace MainWindow
 		if (mctx->frame_offset > StartFrame && mctx->frame_offset < EndFrame) {
 			// draw a marker
 			UINT32 pos = ((mctx->frame_offset - StartFrame) / mctx->zoom_mult) + WVFRM_OFFSET;
-			MoveToEx(hdc, pos, 48, nullptr);
-			LineTo(hdc, pos, 64);
+			MoveToEx(hdc, pos, MAIN_WINDOW_TIMEBAR_OFFSET, nullptr);
+			LineTo(hdc, pos, MAIN_WINDOW_TIMEBAR_OFFSET + 32);
 		}
 
 		SelectObject(hdc, oldPen);
@@ -1133,7 +1174,7 @@ namespace MainWindow
 
 		if (hFile != nullptr) {
 
-			SendMessage(m_hwndStatusBar, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)L"Saving...");
+			SetWindowText(m_hwndStatus1, L"Saving...");
 
 			// write a wav file
 			UINT32 DataSize =
@@ -1254,7 +1295,7 @@ namespace MainWindow
 			}
 		done:
 			SendMessage(m_hwndProgBar, PBM_SETPOS, 0, 0);
-			SendMessage(m_hwndStatusBar, SB_SETTEXT, MAKEWORD(0, 0), (LPARAM)L"Ready");
+			SetWindowText(m_hwndStatus1, L"Ready");
 
 			// close file
 			CloseHandle(hFile);
@@ -1850,6 +1891,16 @@ namespace MainWindow
 					}
 				}
 				break;
+			case ID_SETTINGS_SNAP:
+				if (TRUE == mctx->snap_selection) {
+					CheckMenuItem(GetMenu(hWnd), ID_SETTINGS_SNAP, MF_UNCHECKED);
+					mctx->snap_selection = FALSE;
+				}
+				else {
+					CheckMenuItem(GetMenu(hWnd), ID_SETTINGS_SNAP, MF_CHECKED);
+					mctx->snap_selection = TRUE;
+				}
+				break;
 			case ID_FILE_NEW:
 				// new project - reset everything
 				StartNewProject();
@@ -2048,7 +2099,7 @@ namespace MainWindow
 			}
 			break;
 		case WM_SIZE:
-			SendMessage(m_hwndStatusBar, WM_SIZE, wParam, lParam);
+			//SendMessage(m_hwndStatusBar, WM_SIZE, wParam, lParam);
 			SendMessage(m_hwndToolbar, WM_SIZE, wParam, lParam);
 			mctx = (MainWindowContext*)GetWindowLongPtr(hWnd, GWLP_USERDATA);
 			for (int TrackIndex = 0; TrackIndex < NUM_TRACKS; TrackIndex++) {
@@ -2147,7 +2198,7 @@ namespace MainWindow
 
 		HWND hwndToolbar = CreateToolbar(m_hwndMainWindow, g_hInst);
 
-		CreateStatusBar(m_hwndMainWindow);
+		//CreateStatusBar(m_hwndMainWindow);
 
 		return m_hwndMainWindow;
 	}

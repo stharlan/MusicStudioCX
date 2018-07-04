@@ -1,7 +1,9 @@
 #pragma once
 
-#define MAIN_WINDOW_HEADER_HEIGHT 64
+#define MAIN_WINDOW_HEADER_HEIGHT 96
+#define MAIN_WINDOW_TIMEBAR_OFFSET 64
 #define WVFRM_OFFSET 56
+
 
 namespace MainWindow
 {
@@ -28,6 +30,7 @@ namespace MainWindow
 		AUDIO_DEVICE_TYPE adt;
 		wchar_t WavFileName[1024];
 		std::wstring ProjectDir;
+		BOOL snap_selection;
 	} MainWindowContext;
 
 	void initialize_main_window(HINSTANCE hInst);
